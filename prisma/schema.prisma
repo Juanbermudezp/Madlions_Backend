@@ -40,6 +40,13 @@ enum Rol {
   @@map("rol")
 }
 
+enum EstadoBloque {
+  DISPONIBLE
+  OCUPADO
+
+  @@map("estado_bloque")
+}
+
 /// Cuenta de acceso de cualquier persona del sistema.
 ///
 /// Las restricciones que Prisma no puede expresar (largo mínimo del nombre y
@@ -58,7 +65,7 @@ model User {
 
   refreshTokens RefreshToken[]
   miembro       Miembro?
-
+  bloquesDisponibilidad BloqueDisponibilidad[]
   @@map("usuario")
 }
 
@@ -94,4 +101,18 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model BloqueDisponibilidad {
+  id           String       @id @default(uuid()) @db.Uuid
+  entrenadorId String       @map("entrenador_id") @db.Uuid
+  entrenador   User         @relation(fields: [entrenadorId], references: [id])
+  inicio       DateTime
+  fin          DateTime
+  duracionMin  Int          @map("duracion_min")
+  estado       EstadoBloque @default(DISPONIBLE)
+  creadoEn     DateTime     @default(now()) @map("creado_en")
+
+  @@index([entrenadorId, inicio])
+  @@map("bloque_disponibilidad")
 }
