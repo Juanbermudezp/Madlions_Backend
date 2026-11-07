@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
 import { EmailAlreadyTakenError } from '@Users/errors';
-import { Prisma, type User } from '@PrismaClient';
+import { Prisma, type Rol, type User } from '@PrismaClient';
 
 /** Código de Prisma para violación de restricción única. */
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
@@ -9,10 +9,15 @@ const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
 export interface CreateUserData {
   email: string;
   passwordHash: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+  /** Si no se indica, la base asigna MIEMBRO. */
+  rol?: Rol;
 }
 
 /**
- * Único punto del módulo que habla con la tabla `users`.
+ * Único punto del módulo que habla con la tabla `usuario`.
  *
  * Los servicios no conocen Prisma: reciben y devuelven entidades, y los
  * detalles del ORM (códigos de error, formas de `where`, `select`) quedan
@@ -31,10 +36,10 @@ export class UserRepository {
    * insert. El código P2002 de Prisma se traduce a un error de dominio para
    * que la capa de servicio no tenga que conocer los códigos del ORM.
    */
-  async create({ email, passwordHash }: CreateUserData): Promise<User> {
+  async create({ email, ...data }: CreateUserData): Promise<User> {
     try {
       return await this.prisma.user.create({
-        data: { email: this.normalizeEmail(email), passwordHash },
+        data: { email: this.normalizeEmail(email), ...data },
       });
     } catch (error) {
       if (
