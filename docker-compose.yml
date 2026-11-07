@@ -45,7 +45,7 @@ services:
       # servicio (`postgres`), no `localhost`.
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-si_be_boilerplate}?schema=public
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET es obligatorio, copiá .env.example a .env}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-7}
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
     ports:

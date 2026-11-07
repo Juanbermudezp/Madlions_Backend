@@ -30,17 +30,52 @@ datasource db {
   provider = "postgresql"
 }
 
+/// Roles del sistema (Módulo 0). Solo se aceptan estos cuatro valores.
+enum Rol {
+  MIEMBRO
+  ENTRENADOR
+  RECEPCION
+  ADMINISTRADOR
+
+  @@map("rol")
+}
+
+/// Cuenta de acceso de cualquier persona del sistema.
+///
+/// Las restricciones que Prisma no puede expresar (largo mínimo del nombre y
+/// del apellido, formato del teléfono) viven como CHECK en la migración.
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
   passwordHash String   @map("password_hash")
-  isActive     Boolean  @default(true) @map("is_active")
+  nombre       String   @db.VarChar(50)
+  apellido     String   @db.VarChar(50)
+  telefono     String   @db.Char(8)
+  rol          Rol      @default(MIEMBRO)
+  isActive     Boolean  @default(true) @map("activo")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
+  miembro       Miembro?
 
-  @@map("users")
+  @@map("usuario")
+}
+
+/// Ficha de un miembro del gimnasio. Cada ficha pertenece a un único usuario.
+///
+/// `codigoMiembro` lo genera el servidor a partir de la secuencia
+/// `miembro_codigo_seq` (MBR-000001, MBR-000002, ...). Los formatos del DUI y
+/// del código se validan con CHECK en la migración.
+model Miembro {
+  id            String   @id @default(uuid()) @db.Uuid
+  usuarioId     String   @unique @map("usuario_id") @db.Uuid
+  usuario       User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  documento     String   @unique @db.Char(10)
+  codigoMiembro String   @unique @map("codigo_miembro") @db.Char(10)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("miembro")
 }
 
 model RefreshToken {

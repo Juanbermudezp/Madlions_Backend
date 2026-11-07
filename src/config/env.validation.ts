@@ -74,7 +74,7 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     PORT: readInt(raw, 'PORT', 3000),
     DATABASE_URL: readString(raw, 'DATABASE_URL', ''),
     JWT_SECRET: jwtSecret,
-    JWT_EXPIRES_IN: readString(raw, 'JWT_EXPIRES_IN', '15m'),
+    JWT_EXPIRES_IN: readString(raw, 'JWT_EXPIRES_IN', '8h'),
     REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(raw, 'REFRESH_TOKEN_EXPIRES_IN_DAYS', 7),
     BCRYPT_SALT_ROUNDS: readInt(raw, 'BCRYPT_SALT_ROUNDS', 12),
   };
