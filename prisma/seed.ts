@@ -1,25 +1,73 @@
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../src/generated/prisma/client.js';
+import { PrismaClient, Rol } from '../src/generated/prisma/client.js';
 
-const DEMO_EMAIL = 'demo@example.com';
-const DEMO_PASSWORD = 'Demo1234!';
+const PASSWORD = 'Demo1234!';
+
+interface UsuarioSeed {
+  email: string;
+  nombre: string;
+  apellido: string;
+  telefono: string;
+  rol: Rol;
+  activo?: boolean;
+  /** Solo los miembros tienen ficha, y la ficha lleva el DUI. */
+  documento?: string;
+}
+
+// Un usuario por rol, un segundo entrenador (para probar que uno no toca los
+// recursos del otro) y un usuario inactivo (para probar el 401 del login).
+const USUARIOS: UsuarioSeed[] = [
+  { email: 'demo@example.com', nombre: 'Usuario', apellido: 'Demo', telefono: '70000000', rol: Rol.MIEMBRO, documento: '00000000-0' },
+  { email: 'miembro@madlions.com', nombre: 'María', apellido: 'López', telefono: '70000001', rol: Rol.MIEMBRO, documento: '01234567-8' },
+  { email: 'entrenador@madlions.com', nombre: 'Carlos', apellido: 'Martínez', telefono: '70000002', rol: Rol.ENTRENADOR },
+  { email: 'entrenador2@madlions.com', nombre: 'Ana', apellido: 'Hernández', telefono: '70000003', rol: Rol.ENTRENADOR },
+  { email: 'recepcion@madlions.com', nombre: 'Rosa', apellido: 'Pérez', telefono: '70000004', rol: Rol.RECEPCION },
+  { email: 'admin@madlions.com', nombre: 'Alberto', apellido: 'Ramírez', telefono: '70000005', rol: Rol.ADMINISTRADOR },
+  { email: 'inactivo@madlions.com', nombre: 'Pedro', apellido: 'Inactivo', telefono: '70000006', rol: Rol.MIEMBRO, activo: false, documento: '02345678-9' },
+];
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
+/** Toma el siguiente número de la secuencia y lo formatea como MBR-000001. */
+async function siguienteCodigoMiembro(): Promise<string> {
+  const [{ siguiente }] = await prisma.$queryRaw<{ siguiente: bigint }[]>`
+    SELECT nextval('miembro_codigo_seq') AS siguiente
+  `;
+  return `MBR-${String(siguiente).padStart(6, '0')}`;
+}
+
 async function main() {
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
+  const passwordHash = await bcrypt.hash(PASSWORD, 12);
 
   // `upsert` hace el seed idempotente: se puede correr las veces que haga falta.
-  const user = await prisma.user.upsert({
-    where: { email: DEMO_EMAIL },
-    update: {},
-    create: { email: DEMO_EMAIL, passwordHash },
-  });
+  for (const { documento, activo = true, ...datos } of USUARIOS) {
+    const usuario = await prisma.user.upsert({
+      where: { email: datos.email },
+      update: { ...datos, isActive: activo },
+      create: { ...datos, isActive: activo, passwordHash },
+    });
 
-  console.log(`Usuario demo listo: ${user.email} / ${DEMO_PASSWORD}`);
+    if (documento) {
+      const ficha = await prisma.miembro.findUnique({
+        where: { usuarioId: usuario.id },
+      });
+      if (!ficha) {
+        await prisma.miembro.create({
+          data: {
+            usuarioId: usuario.id,
+            documento,
+            codigoMiembro: await siguienteCodigoMiembro(),
+          },
+        });
+      }
+    }
+
+    const estado = activo ? '' : ' (inactivo)';
+    console.log(`${datos.rol.padEnd(13)} ${datos.email} / ${PASSWORD}${estado}`);
+  }
 }
 
 try {
