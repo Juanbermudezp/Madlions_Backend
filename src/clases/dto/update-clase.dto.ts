@@ -1,16 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
-    IsInt,
+    IsIn,
     IsOptional,
     IsString,
     IsUUID,
     Matches,
-    Max,
     MaxLength,
-    Min,
 } from 'class-validator';
-import { CUPO_INVALIDO } from './create-clase.dto.js';
+import { CUPO_INVALIDO, CUPOS_VALIDOS } from './create-clase.dto.js';
 
 const trim = ({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value;
@@ -57,8 +55,6 @@ export class UpdateClaseDto {
 
     @ApiPropertyOptional({ example: 20, minimum: 1, maximum: 50 })
     @IsOptional()
-    @IsInt({ message: CUPO_INVALIDO })
-    @Min(1, { message: CUPO_INVALIDO })
-    @Max(50, { message: CUPO_INVALIDO })
+    @IsIn(CUPOS_VALIDOS, { message: CUPO_INVALIDO })
     cupoMaximo?: number;
 }

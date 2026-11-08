@@ -1,20 +1,24 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
-    IsInt,
+    IsIn,
     IsOptional,
     IsString,
     IsUUID,
     Matches,
-    Max,
     MaxLength,
-    Min,
 } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value;
 
 export const CUPO_INVALIDO = 'El cupo máximo debe ser un número entero de 1 a 50.';
+
+/**
+ * Enteros de 1 a 50. Se valida con un solo @IsIn (y no con IsInt + Min + Max)
+ * para que un cupo faltante o inválido devuelva un único mensaje.
+ */
+export const CUPOS_VALIDOS: readonly number[] = Array.from({ length: 50 }, (_, i) => i + 1);
 
 /** Cuerpo de POST /clases (H4, BE-4.2). Horas en hora de El Salvador. */
 export class CreateClaseDto {
@@ -49,8 +53,6 @@ export class CreateClaseDto {
     horaFin!: string;
 
     @ApiProperty({ example: 20, minimum: 1, maximum: 50 })
-    @IsInt({ message: CUPO_INVALIDO })
-    @Min(1, { message: CUPO_INVALIDO })
-    @Max(50, { message: CUPO_INVALIDO })
+    @IsIn(CUPOS_VALIDOS, { message: CUPO_INVALIDO })
     cupoMaximo!: number;
 }
