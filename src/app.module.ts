@@ -7,6 +7,7 @@ import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
+import { ProgresoModule } from './progreso/progreso.module.js';
 import { BloquesModule } from '@Bloques';
 import { ClasesModule } from '@Clases';
 
@@ -23,6 +24,7 @@ import { ClasesModule } from '@Clases';
     AuthModule,
     ClasesModule,
     BloquesModule,
+    ProgresoModule,
   ],
   providers: [
     {
