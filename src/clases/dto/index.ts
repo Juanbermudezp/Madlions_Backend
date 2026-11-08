@@ -1,0 +1,1 @@
+export * from './clase-response.dto.js';
