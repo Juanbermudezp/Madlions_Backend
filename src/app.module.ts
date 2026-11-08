@@ -8,6 +8,8 @@ import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
 import { ProgresoModule } from './progreso/progreso.module.js';
+import { BloquesModule } from '@Bloques';
+import { ClasesModule } from '@Clases';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { ProgresoModule } from './progreso/progreso.module.js';
     HealthModule,
     UsersModule,
     AuthModule,
+    ClasesModule,
+    BloquesModule,
     ProgresoModule,
   ],
   providers: [
@@ -33,4 +37,4 @@ import { ProgresoModule } from './progreso/progreso.module.js';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

@@ -40,6 +40,40 @@ enum Rol {
   @@map("rol")
 }
 
+enum EstadoBloque {
+  DISPONIBLE
+  OCUPADO
+
+  @@map("estado_bloque")
+}
+
+enum EstadoClase {
+  PROGRAMADA
+  CANCELADA
+
+  @@map("estado_clase")
+}
+
+/// Módulo que genera un aviso (Módulo 9). SESIONES y PAGOS quedan disponibles
+/// para avisos futuros.
+enum ModuloOrigen {
+  MEMBRESIAS
+  CLASES
+  SESIONES
+  PAGOS
+
+  @@map("modulo_origen")
+}
+
+/// Estado de lectura de un aviso: el servicio lo crea NO_LEIDO y pasa a LEIDO
+/// cuando el miembro lo abre o marca todos como leídos (H23).
+enum EstadoAviso {
+  NO_LEIDO
+  LEIDO
+
+  @@map("estado_aviso")
+}
+
 /// Cuenta de acceso de cualquier persona del sistema.
 ///
 /// Las restricciones que Prisma no puede expresar (largo mínimo del nombre y
@@ -58,7 +92,8 @@ model User {
 
   refreshTokens RefreshToken[]
   miembro       Miembro?
-
+  bloquesDisponibilidad BloqueDisponibilidad[]
+  clases                Clase[]
   @@map("usuario")
 }
 
@@ -75,6 +110,8 @@ model Miembro {
   codigoMiembro String   @unique @map("codigo_miembro") @db.Char(10)
   createdAt     DateTime @default(now()) @map("created_at")
   registrosProgreso RegistroProgreso[] 
+
+  avisos Aviso[]
 
   @@map("miembro")
 }
@@ -96,6 +133,64 @@ model RefreshToken {
   @@index([userId])
   @@map("refresh_tokens")
 }
+
+model BloqueDisponibilidad {
+  id           String       @id @default(uuid()) @db.Uuid
+  entrenadorId String       @map("entrenador_id") @db.Uuid
+  entrenador   User         @relation(fields: [entrenadorId], references: [id])
+  inicio       DateTime
+  fin          DateTime
+  duracionMin  Int          @map("duracion_min")
+  estado       EstadoBloque @default(DISPONIBLE)
+  creadoEn     DateTime     @default(now()) @map("creado_en")
+
+  @@index([entrenadorId, inicio])
+  @@map("bloque_disponibilidad")
+}
+
+model Clase {
+  id           String      @id @default(uuid()) @db.Uuid
+  nombre       String      @db.VarChar(80)
+  entrenadorId String      @map("entrenador_id") @db.Uuid
+  entrenador   User        @relation(fields: [entrenadorId], references: [id])
+  inicio       DateTime
+  fin          DateTime
+  estado       EstadoClase @default(PROGRAMADA)
+  creadoEn     DateTime    @default(now()) @map("creado_en")
+
+  @@index([entrenadorId, inicio])
+  @@map("clase")
+}
+
+/// Aviso de un miembro (Módulo 9, H22). Lo registra únicamente AvisosService;
+/// no hay endpoint para crearlos.
+///
+/// Deduplicación: el índice único (miembro_id, referencia) impide repetir un
+/// aviso con la misma referencia para el mismo miembro. Los avisos sin
+/// referencia (NULL) no chocan entre sí, porque PostgreSQL trata cada NULL como
+/// distinto en un índice único: se comporta como el índice parcial que pide
+/// DB-22.1 sin necesitar la preview `partialIndexes`.
+///
+/// Las restricciones que Prisma no puede expresar (título y mensaje no vacíos,
+/// estado coherente con leido_en) viven como CHECK en la migración.
+model Aviso {
+  id           String       @id @default(uuid()) @db.Uuid
+  miembroId    String       @map("miembro_id") @db.Uuid
+  miembro      Miembro      @relation(fields: [miembroId], references: [id], onDelete: Cascade)
+  titulo       String       @db.VarChar(100)
+  mensaje      String       @db.VarChar(500)
+  moduloOrigen ModuloOrigen @map("modulo_origen")
+  referencia   String?      @db.VarChar(100)
+  estado       EstadoAviso  @default(NO_LEIDO)
+  creadoEn     DateTime     @default(now()) @map("creado_en")
+  leidoEn      DateTime?    @map("leido_en")
+
+  @@unique([miembroId, referencia])
+  @@index([miembroId, creadoEn])
+  @@index([miembroId, estado])
+  @@map("aviso")
+}
+
 
 enum TipoProgreso {
   PESO
