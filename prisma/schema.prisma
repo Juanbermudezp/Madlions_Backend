@@ -49,7 +49,7 @@ enum EstadoBloque {
 
 enum EstadoClase {
   PROGRAMADA
-  CANCELADA
+  CANCELADA_GIMNASIO
 
   @@map("estado_clase")
 }
@@ -148,17 +148,40 @@ model BloqueDisponibilidad {
   @@map("bloque_disponibilidad")
 }
 
+/// Catálogo de tipos de clase grupal (Yoga, Spinning, Crossfit...). Lo
+/// administra el administrador (H4) y lo usan los planes (H1).
+///
+/// El largo mínimo del nombre (2 caracteres) vive como CHECK en la migración.
+model TipoClase {
+  id          String   @id @default(uuid()) @db.Uuid
+  nombre      String   @unique @db.VarChar(40)
+  descripcion String   @db.VarChar(300)
+  activo      Boolean  @default(true)
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  clases Clase[]
+
+  @@map("tipo_clase")
+}
+
+/// Clase grupal programada (H4). La creó H8 en su forma mínima para validar
+/// traslapes y H4 la amplía. Los CHECK de horario (fin > inicio) y de cupo
+/// (1 a 50) viven en las migraciones.
 model Clase {
   id           String      @id @default(uuid()) @db.Uuid
-  nombre       String      @db.VarChar(80)
+  tipoClaseId  String      @map("tipo_clase_id") @db.Uuid
+  tipoClase    TipoClase   @relation(fields: [tipoClaseId], references: [id])
   entrenadorId String      @map("entrenador_id") @db.Uuid
   entrenador   User        @relation(fields: [entrenadorId], references: [id])
+  descripcion  String?     @db.VarChar(300)
   inicio       DateTime
   fin          DateTime
+  cupoMaximo   Int         @map("cupo_maximo")
   estado       EstadoClase @default(PROGRAMADA)
   creadoEn     DateTime    @default(now()) @map("creado_en")
 
   @@index([entrenadorId, inicio])
+  @@index([inicio])
   @@map("clase")
 }
 

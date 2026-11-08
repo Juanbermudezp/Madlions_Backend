@@ -71,6 +71,26 @@ async function crearUsuarios() {
   }
 }
 
+/** Catálogo inicial de tipos de clase (H4). Usa el nombre como clave, así que
+ * correr el seed varias veces no duplica nada. Devuelve el id de cada tipo. */
+async function crearTiposClase(): Promise<Record<string, string>> {
+  const tipos = [
+    { nombre: 'Spinning', descripcion: 'Ciclismo indoor de alta intensidad con música.' },
+    { nombre: 'Yoga', descripcion: 'Posturas, respiración y flexibilidad.' },
+    { nombre: 'Crossfit', descripcion: 'Entrenamiento funcional de alta intensidad.' },
+  ];
+  const ids: Record<string, string> = {};
+  for (const tipo of tipos) {
+    const { id } = await prisma.tipoClase.upsert({
+      where: { nombre: tipo.nombre },
+      update: {},
+      create: tipo,
+    });
+    ids[tipo.nombre] = id;
+  }
+  return ids;
+}
+
 /**
  * Clases del entrenador principal para probar el traslape de H8. Se crean
  * relativas al día en que corre el seed; si ya existen no se duplican (para
@@ -85,11 +105,13 @@ async function crearClases() {
   const manana = sumarDias(hoyLocal(), 1);
   const pasado = sumarDias(hoyLocal(), 2);
 
+  const tipos = await crearTiposClase();
+
   await prisma.clase.createMany({
     data: [
-      { nombre: 'Spinning', entrenadorId: entrenador.id, inicio: aFechaLocal(manana, '07:00'), fin: aFechaLocal(manana, '08:00') },
-      { nombre: 'Yoga', entrenadorId: entrenador.id, inicio: aFechaLocal(pasado, '18:00'), fin: aFechaLocal(pasado, '19:00') },
-      { nombre: 'Crossfit', entrenadorId: entrenador.id, inicio: aFechaLocal(manana, '10:00'), fin: aFechaLocal(manana, '11:00'), estado: EstadoClase.CANCELADA },
+      { tipoClaseId: tipos.Spinning, entrenadorId: entrenador.id, inicio: aFechaLocal(manana, '07:00'), fin: aFechaLocal(manana, '08:00'), cupoMaximo: 20 },
+      { tipoClaseId: tipos.Yoga, entrenadorId: entrenador.id, inicio: aFechaLocal(pasado, '18:00'), fin: aFechaLocal(pasado, '19:00'), cupoMaximo: 15 },
+      { tipoClaseId: tipos.Crossfit, entrenadorId: entrenador.id, inicio: aFechaLocal(manana, '10:00'), fin: aFechaLocal(manana, '11:00'), cupoMaximo: 12, estado: EstadoClase.CANCELADA_GIMNASIO },
     ],
   });
   console.log(`Clases de prueba: Spinning ${manana} 07:00, Yoga ${pasado} 18:00, Crossfit ${manana} 10:00 (cancelada)`);
