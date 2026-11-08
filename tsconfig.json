@@ -47,7 +47,11 @@
       "@Prisma/*": ["./src/prisma/*/index.ts"],
       "@Common/*": ["./src/common/*/index.ts"],
       "@Config": ["./src/config/index.ts"],
-      "@PrismaClient": ["./src/generated/prisma/client.ts"]
+      "@PrismaClient": ["./src/generated/prisma/client.ts"],
+      "@Clases": ["./src/clases/index.ts"],
+      "@Clases/*": ["./src/clases/*/index.ts"],
+      "@Bloques": ["./src/bloques/index.ts"],
+      "@Bloques/*": ["./src/bloques/*/index.ts"],
     }
   }
 }

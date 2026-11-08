@@ -7,6 +7,8 @@ import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
+import { BloquesModule } from '@Bloques';
+import { ClasesModule } from '@Clases';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { validateEnv } from '@Config';
     HealthModule,
     UsersModule,
     AuthModule,
+    ClasesModule,
+    BloquesModule,
   ],
   providers: [
     {
@@ -31,4 +35,4 @@ import { validateEnv } from '@Config';
     },
   ],
 })
-export class AppModule {}
+export class AppModule { }

@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Rol } from '../src/generated/prisma/client.js';
+import { EstadoClase, PrismaClient, Rol } from '../src/generated/prisma/client.js';
+import { aFechaLocal, hoyLocal, sumarDias } from '../src/common/fechas/fechas.js';
 
 const PASSWORD = 'Demo1234!';
 
@@ -39,7 +40,7 @@ async function siguienteCodigoMiembro(): Promise<string> {
   return `MBR-${String(siguiente).padStart(6, '0')}`;
 }
 
-async function main() {
+async function crearUsuarios() {
   const passwordHash = await bcrypt.hash(PASSWORD, 12);
 
   // `upsert` hace el seed idempotente: se puede correr las veces que haga falta.
@@ -70,8 +71,33 @@ async function main() {
   }
 }
 
+/**
+ * Clases del entrenador principal para probar el traslape de H8. Se crean
+ * relativas al día en que corre el seed; si ya existen no se duplican (para
+ * regenerarlas: DELETE FROM clase; y volver a correr el seed).
+ */
+async function crearClases() {
+  const entrenador = await prisma.user.findUniqueOrThrow({
+    where: { email: 'entrenador@madlions.com' },
+  });
+  if (await prisma.clase.count({ where: { entrenadorId: entrenador.id } })) return;
+
+  const manana = sumarDias(hoyLocal(), 1);
+  const pasado = sumarDias(hoyLocal(), 2);
+
+  await prisma.clase.createMany({
+    data: [
+      { nombre: 'Spinning', entrenadorId: entrenador.id, inicio: aFechaLocal(manana, '07:00'), fin: aFechaLocal(manana, '08:00') },
+      { nombre: 'Yoga', entrenadorId: entrenador.id, inicio: aFechaLocal(pasado, '18:00'), fin: aFechaLocal(pasado, '19:00') },
+      { nombre: 'Crossfit', entrenadorId: entrenador.id, inicio: aFechaLocal(manana, '10:00'), fin: aFechaLocal(manana, '11:00'), estado: EstadoClase.CANCELADA },
+    ],
+  });
+  console.log(`Clases de prueba: Spinning ${manana} 07:00, Yoga ${pasado} 18:00, Crossfit ${manana} 10:00 (cancelada)`);
+}
+
 try {
-  await main();
+  await crearUsuarios();
+  await crearClases();
 } finally {
   await prisma.$disconnect();
 }
