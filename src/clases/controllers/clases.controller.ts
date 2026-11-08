@@ -25,6 +25,7 @@ import {
     ClaseAgendaResponseDto,
     ClaseResponseDto,
     CreateClaseDto,
+    EntrenadorResumenDto,
     UpdateClaseDto,
 } from '@Clases/dto';
 import { SemanaQueryDto } from '@Common/dto';
@@ -34,6 +35,7 @@ import { Rol, type User } from '@PrismaClient';
  * Clases grupales. Los permisos van por endpoint:
  * - GET /clases (agenda semanal): todos los roles.
  * - GET /clases/mias: solo ENTRENADOR (H8).
+ * - GET /clases/entrenadores: solo ADMINISTRADOR (formulario de H4).
  * - POST y PATCH: solo ADMINISTRADOR (H4).
  */
 @ApiTags('clases')
@@ -60,6 +62,15 @@ export class ClasesController {
         @Query() query: SemanaQueryDto,
     ): Promise<ClaseResponseDto[]> {
         return this.clasesService.listarSemana(user.id, query.semana);
+    }
+
+    @Get('entrenadores')
+    @Roles(Rol.ADMINISTRADOR)
+    @ApiOperation({ summary: 'Entrenadores activos que pueden impartir una clase' })
+    @ApiOkResponse({ type: EntrenadorResumenDto, isArray: true })
+    @ApiForbiddenResponse({ description: 'El usuario no es administrador.' })
+    listarEntrenadores(): Promise<EntrenadorResumenDto[]> {
+        return this.clasesService.listarEntrenadores();
     }
 
     @Post()

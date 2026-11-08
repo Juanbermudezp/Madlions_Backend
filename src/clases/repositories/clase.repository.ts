@@ -68,6 +68,15 @@ export class ClaseRepository {
     });
   }
 
+  /** Entrenadores activos, para elegir quién imparte una clase. */
+  findEntrenadoresActivos(): Promise<{ id: string; nombre: string; apellido: string }[]> {
+    return this.prisma.user.findMany({
+      where: { rol: Rol.ENTRENADOR, isActive: true },
+      select: { id: true, nombre: true, apellido: true },
+      orderBy: [{ nombre: 'asc' }, { apellido: 'asc' }],
+    });
+  }
+
   async existeTipoClaseActivo(id: string): Promise<boolean> {
     const total = await this.prisma.tipoClase.count({ where: { id, activo: true } });
     return total > 0;

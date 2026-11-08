@@ -9,6 +9,7 @@ import { ActividadTraslapadaError, ClaseNoModificableError } from '@Clases/error
 import {
   ClaseAgendaResponseDto,
   ClaseResponseDto,
+  type EntrenadorResumenDto,
   type CreateClaseDto,
   type UpdateClaseDto,
 } from '@Clases/dto';
@@ -54,6 +55,12 @@ export class ClasesService {
     const { desde, hasta } = rangoDeSemana(semana ?? hoyLocal(ahora));
     const clases = await this.claseRepository.findEntre(desde, hasta);
     return this.aAgenda(clases, ahora);
+  }
+
+  /** H4: entrenadores activos para el formulario de clases del administrador. */
+  async listarEntrenadores(): Promise<EntrenadorResumenDto[]> {
+    const entrenadores = await this.claseRepository.findEntrenadoresActivos();
+    return entrenadores.map((e) => ({ id: e.id, nombre: `${e.nombre} ${e.apellido}` }));
   }
 
   /** H4: el administrador programa una clase nueva. */

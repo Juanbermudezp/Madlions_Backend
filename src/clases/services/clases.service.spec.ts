@@ -46,6 +46,7 @@ describe('ClasesService (H4)', () => {
     const repo = {
         findProgramadasDelEntrenadorEntre: vi.fn(),
         findEntre: vi.fn(),
+        findEntrenadoresActivos: vi.fn(),
         findById: vi.fn(),
         existeTipoClaseActivo: vi.fn(),
         existeEntrenadorActivo: vi.fn(),
@@ -90,6 +91,20 @@ describe('ClasesService (H4)', () => {
                 lugaresDisponibles: 15,
                 estado: EstadoClase.PROGRAMADA,
             });
+        });
+    });
+
+    describe('listarEntrenadores', () => {
+        it('devuelve id y nombre completo de los entrenadores activos', async () => {
+            repo.findEntrenadoresActivos.mockResolvedValue([
+                { id: 'e1', nombre: 'Carlos', apellido: 'Martínez' },
+                { id: 'e2', nombre: 'Ana', apellido: 'Hernández' },
+            ]);
+
+            expect(await service.listarEntrenadores()).toEqual([
+                { id: 'e1', nombre: 'Carlos Martínez' },
+                { id: 'e2', nombre: 'Ana Hernández' },
+            ]);
         });
     });
 
