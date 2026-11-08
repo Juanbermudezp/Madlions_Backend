@@ -74,6 +74,7 @@ model Miembro {
   documento     String   @unique @db.Char(10)
   codigoMiembro String   @unique @map("codigo_miembro") @db.Char(10)
   createdAt     DateTime @default(now()) @map("created_at")
+  registrosProgreso RegistroProgreso[] 
 
   @@map("miembro")
 }
@@ -94,4 +95,32 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+enum TipoProgreso {
+  PESO
+  CINTURA
+  CADERA
+  PECHO
+  BRAZO
+  MUSLO
+  MARCA
+
+  @@map("tipo_progreso")
+}
+
+model RegistroProgreso {
+  id           String       @id @default(uuid()) @db.Uuid
+  miembroId    String       @map("miembro_id") @db.Uuid
+  miembro      Miembro      @relation(fields: [miembroId], references: [id], onDelete: Cascade)
+
+  fecha        DateTime     @db.Date
+  tipo         TipoProgreso
+  valor        Decimal      @db.Decimal(5, 1)
+  ejercicio    String?      @db.VarChar(60)
+  repeticiones Int?
+  creadoEn     DateTime     @default(now()) @map("creado_en")
+
+  @@index([miembroId, fecha])
+  @@map("registro_progreso")
 }
