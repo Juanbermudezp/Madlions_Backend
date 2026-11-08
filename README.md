@@ -16,6 +16,7 @@ API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con aut
 - [Prisma en detalle](#prisma-en-detalle)
 - [Autenticación](#autenticación)
 - [Endpoints](#endpoints)
+- [Servicio interno de avisos (Módulo 9)](#servicio-interno-de-avisos-módulo-9)
 - [Arquitectura por capas](#arquitectura-por-capas)
 - [Path aliases](#path-aliases)
 - [Estructura del proyecto](#estructura-del-proyecto)
@@ -364,6 +365,62 @@ curl -X POST $BASE/auth/logout \
 ```
 
 Responde `204 No Content`. Es idempotente: repetirlo con un token ya revocado también devuelve `204`, para no convertirse en un oráculo que revele qué tokens existen.
+
+---
+
+## Servicio interno de avisos (Módulo 9)
+
+`AvisosService` (H22) es el único camino para avisar a los miembros: registra un aviso **No leído** por destinatario en la tabla `aviso`, y el miembro lo ve en su bandeja (H23). Ningún módulo construye su propia lógica de envío. **No existe ningún endpoint para crear avisos.**
+
+### Contrato
+
+```ts
+AvisosService.enviar({
+  destinatarios: string[];      // 1 a 500 ids de ficha de miembro (UUID)
+  titulo: string;               // 1 a 100 caracteres
+  mensaje: string;              // 1 a 500 caracteres
+  moduloOrigen: ModuloOrigen;   // MEMBRESIAS | CLASES | SESIONES | PAGOS
+  referencia?: string;          // hasta 100, formato <entidad>-<id>-<evento>
+}): Promise<{ creados: number; omitidosPorDuplicado: number }>
+```
+
+| Regla | Qué pasa |
+|---|---|
+| Un dato no cumple el contrato, o un destinatario no es un miembro | `BadRequestException` con la lista de problemas en `message`. No se registra **ningún** aviso de la llamada. |
+| Ya existe un aviso con la misma `referencia` para ese miembro | No se crea otro; cuenta en `omitidosPorDuplicado`. |
+| Sin `referencia` | Nunca se considera duplicado. |
+| Ids repetidos en `destinatarios` | Se envía una sola vez a cada miembro. |
+
+Referencias en uso: `reserva-{id}-confirmada` (H5), `clase-{id}-cancelada` (H7, H25) y `membresia-{id}-vence` (H24).
+
+### Cómo usarlo desde otro módulo
+
+```ts
+// clases.module.ts
+@Module({ imports: [AvisosModule], /* ... */ })
+export class ClasesModule {}
+
+// clases.service.ts
+constructor(private readonly avisosService: AvisosService) {}
+
+async cancelar(id: string, motivo: string) {
+  const afectados = await this.claseRepository.cancelar(id, motivo); // tu transacción
+  try {
+    await this.avisosService.enviar({
+      destinatarios: afectados.map((r) => r.miembroId),
+      titulo: 'Clase cancelada: Yoga',
+      mensaje: `La clase fue cancelada por el gimnasio. Motivo: ${motivo}.`,
+      moduloOrigen: ModuloOrigen.CLASES,
+      referencia: `clase-${id}-cancelada`,
+    });
+  } catch (error) {
+    // El aviso no revierte la operación: solo se registra el error.
+    this.logger.error(`No se pudo avisar la cancelación de la clase ${id}`, error);
+  }
+}
+```
+
+Llama a `enviar()` **después** de confirmar tu propia transacción. Así, si el aviso falla, tu operación ya quedó guardada.
 
 ---
 
