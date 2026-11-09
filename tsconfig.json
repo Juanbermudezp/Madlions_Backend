@@ -54,6 +54,10 @@
       "@Clases/*": ["./src/clases/*/index.ts"],
       "@Bloques": ["./src/bloques/index.ts"],
       "@Bloques/*": ["./src/bloques/*/index.ts"],
+      "@Planes": ["./src/planes/index.ts"],
+      "@Planes/*": ["./src/planes/*/index.ts"],
+      "@Configuracion": ["./src/configuracion/index.ts"],
+      "@Configuracion/*": ["./src/configuracion/*/index.ts"],
     }
   }
 }

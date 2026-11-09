@@ -10,6 +10,8 @@ import { validateEnv } from '@Config';
 import { ProgresoModule } from './progreso/progreso.module.js';
 import { BloquesModule } from '@Bloques';
 import { ClasesModule } from '@Clases';
+import { PlanesModule } from '@Planes';
+import { ConfiguracionModule } from '@Configuracion';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { ClasesModule } from '@Clases';
     ClasesModule,
     BloquesModule,
     ProgresoModule,
+    PlanesModule,
+    ConfiguracionModule,
   ],
   providers: [
     {
