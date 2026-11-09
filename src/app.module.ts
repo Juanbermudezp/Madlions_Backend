@@ -11,6 +11,7 @@ import { ProgresoModule } from './progreso/progreso.module.js';
 import { BloquesModule } from '@Bloques';
 import { ClasesModule } from '@Clases';
 import { PlanesModule } from '@Planes';
+import { ConfiguracionModule } from '@Configuracion';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PlanesModule } from '@Planes';
     BloquesModule,
     ProgresoModule,
     PlanesModule,
+    ConfiguracionModule,
   ],
   providers: [
     {
