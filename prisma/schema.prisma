@@ -160,6 +160,7 @@ model TipoClase {
   creadoEn    DateTime @default(now()) @map("creado_en")
 
   clases Clase[]
+  planes PlanTipoClase[]
 
   @@map("tipo_clase")
 }
@@ -241,4 +242,57 @@ model RegistroProgreso {
 
   @@index([miembroId, fecha])
   @@map("registro_progreso")
+}
+
+/// Tipos de plan que vende el gimnasio (H1).
+enum TipoPlan {
+  DAYPASS
+  MENSUAL
+  SET_CLASES
+
+  @@map("tipo_plan")
+}
+
+/// Plan que vende el gimnasio (H1).
+///
+/// Las restricciones que Prisma no puede expresar viven como CHECK en la
+/// migración: precio mayor que 0, cantidad_clases entre 1 y 100 solo en
+/// SET_CLASES (nula en los demás) y duracion_dias de 1 en DAYPASS y 30 en los
+/// demás.
+model Plan {
+  id             String   @id @default(uuid()) @db.Uuid
+  nombre         String   @unique @db.VarChar(60)
+  tipo           TipoPlan
+  precio         Decimal  @db.Decimal(10, 2)
+  cantidadClases Int?     @map("cantidad_clases")
+  duracionDias   Int      @map("duracion_dias")
+  beneficios     String   @db.VarChar(500)
+  activo         Boolean  @default(true)
+  creadoEn       DateTime @default(now()) @map("creado_en")
+  actualizadoEn  DateTime @updatedAt @map("actualizado_en")
+
+  tiposClase PlanTipoClase[]
+
+  @@map("plan")
+}
+
+/// Tipos de clase que incluye un plan (H1).
+model PlanTipoClase {
+  planId      String    @map("plan_id") @db.Uuid
+  plan        Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  tipoClaseId String    @map("tipo_clase_id") @db.Uuid
+  tipoClase   TipoClase @relation(fields: [tipoClaseId], references: [id])
+
+  @@id([planId, tipoClaseId])
+  @@map("plan_tipo_clase")
+}
+
+/// Parámetros generales del sistema como pares clave-valor (H1). La migración
+/// carga la fila inicial precio_clase_puntual = 10.00.
+model Configuracion {
+  clave         String   @id @db.VarChar(50)
+  valor         String   @db.VarChar(100)
+  actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
+
+  @@map("configuracion")
 }
