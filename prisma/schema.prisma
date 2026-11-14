@@ -94,6 +94,7 @@ model User {
   miembro       Miembro?
   bloquesDisponibilidad BloqueDisponibilidad[]
   clases                Clase[]
+  sesionesPersonales    SesionPersonal[]
   @@map("usuario")
 }
 
@@ -112,6 +113,7 @@ model Miembro {
   registrosProgreso RegistroProgreso[] 
 
   avisos Aviso[]
+  sesionesPersonales SesionPersonal[]
 
   @@map("miembro")
 }
@@ -143,6 +145,7 @@ model BloqueDisponibilidad {
   duracionMin  Int          @map("duracion_min")
   estado       EstadoBloque @default(DISPONIBLE)
   creadoEn     DateTime     @default(now()) @map("creado_en")
+  sesion       SesionPersonal?
 
   @@index([entrenadorId, inicio])
   @@map("bloque_disponibilidad")
@@ -295,4 +298,39 @@ model Configuracion {
   actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
 
   @@map("configuracion")
+}
+
+enum EstadoSesion {
+  AGENDADA
+
+  @@map("estado_sesion")
+}
+
+enum AsistenciaSesion {
+  SIN_REGISTRAR
+  ASISTIO
+  NO_ASISTIO
+
+  @@map("asistencia_sesion")
+}
+
+model SesionPersonal {
+  id           String               @id @default(uuid()) @db.Uuid
+  bloqueId     String               @unique @map("bloque_id") @db.Uuid
+  bloque       BloqueDisponibilidad @relation(fields: [bloqueId], references: [id])
+  miembroId    String               @map("miembro_id") @db.Uuid
+  miembro      Miembro              @relation(fields: [miembroId], references: [id])
+  entrenadorId String               @map("entrenador_id") @db.Uuid
+  entrenador   User                 @relation(fields: [entrenadorId], references: [id])
+  inicio       DateTime
+  fin          DateTime
+  precio       Decimal              @db.Decimal(10, 2)
+  cobroId      String?              @unique @map("cobro_id") @db.Uuid
+  estado       EstadoSesion         @default(AGENDADA)
+  asistencia   AsistenciaSesion     @default(SIN_REGISTRAR)
+  creadaEn     DateTime             @default(now()) @map("creada_en")
+
+  @@index([miembroId, inicio])
+  @@index([entrenadorId, inicio])
+  @@map("sesion_personal")
 }
