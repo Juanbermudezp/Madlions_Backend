@@ -94,6 +94,7 @@ model User {
   miembro       Miembro?
   bloquesDisponibilidad BloqueDisponibilidad[]
   clases                Clase[]
+  maquinasActualizadas  Maquina[]
   @@map("usuario")
 }
 
@@ -295,4 +296,62 @@ model Configuracion {
   actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
 
   @@map("configuracion")
+}
+
+/// Tipo de máquina del inventario (H17).
+enum TipoMaquina {
+  CARDIO
+  FUERZA
+  PESO_LIBRE
+  FUNCIONAL
+
+  @@map("tipo_maquina")
+}
+
+/// Zona del gimnasio donde está la máquina (H17).
+enum ZonaMaquina {
+  PISO_1
+  PISO_2
+  AREA_FUNCIONAL
+
+  @@map("zona_maquina")
+}
+
+/// Estado operativo de una máquina (H17). Lo cambian el administrador y el
+/// entrenador (H18, supuesto S13).
+enum EstadoMaquina {
+  OPERATIVA
+  EN_MANTENIMIENTO
+  FUERA_DE_SERVICIO
+
+  @@map("estado_maquina")
+}
+
+/// Máquina del inventario del gimnasio (H17).
+///
+/// `ultimoMotivo` y `ultimoCambioPor` son datos internos: solo el
+/// administrador y el entrenador los reciben. El filtrado lo hace el DTO de
+/// respuesta en el backend (BE-17.1), nunca el frontend.
+///
+/// El historial completo de cambios vive en otra tabla (H18, DB-18.1); estas
+/// dos columnas son la caché del último cambio para no consultarlo al listar.
+///
+/// Las restricciones que Prisma no puede expresar viven como CHECK en la
+/// migración: formato del código (MAQ-000), largo del nombre y del motivo, y
+/// la coherencia entre el estado y la fecha estimada de retorno (una máquina
+/// operativa no tiene fecha de retorno pendiente).
+model Maquina {
+  id                   String        @id @default(uuid()) @db.Uuid
+  codigo               String        @unique @db.VarChar(10)
+  nombre               String        @db.VarChar(60)
+  tipo                 TipoMaquina
+  zona                 ZonaMaquina
+  estado               EstadoMaquina @default(OPERATIVA)
+  fechaEstimadaRetorno DateTime?     @map("fecha_estimada_retorno") @db.Date
+  ultimoMotivo         String?       @map("ultimo_motivo") @db.VarChar(250)
+  ultimoCambioPorId    String?       @map("ultimo_cambio_por") @db.Uuid
+  ultimoCambioPor      User?         @relation(fields: [ultimoCambioPorId], references: [id], onDelete: SetNull)
+  actualizadoEn        DateTime      @default(now()) @updatedAt @map("actualizado_en")
+
+  @@map("maquina")
 }

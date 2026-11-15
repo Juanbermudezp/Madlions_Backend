@@ -58,6 +58,8 @@
       "@Planes/*": ["./src/planes/*/index.ts"],
       "@Configuracion": ["./src/configuracion/index.ts"],
       "@Configuracion/*": ["./src/configuracion/*/index.ts"],
+      "@Maquinas": ["./src/maquinas/index.ts"],
+      "@Maquinas/*": ["./src/maquinas/*/index.ts"],
     }
   }
 }

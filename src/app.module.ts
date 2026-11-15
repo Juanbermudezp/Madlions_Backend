@@ -12,6 +12,7 @@ import { BloquesModule } from '@Bloques';
 import { ClasesModule } from '@Clases';
 import { PlanesModule } from '@Planes';
 import { ConfiguracionModule } from '@Configuracion';
+import { MaquinasModule } from '@Maquinas';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ConfiguracionModule } from '@Configuracion';
     ProgresoModule,
     PlanesModule,
     ConfiguracionModule,
+    MaquinasModule,
   ],
   providers: [
     {

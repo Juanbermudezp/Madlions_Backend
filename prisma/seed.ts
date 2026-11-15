@@ -1,7 +1,13 @@
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { EstadoClase, PrismaClient, Rol } from '../src/generated/prisma/client.js';
+import {
+  EstadoClase,
+  PrismaClient,
+  Rol,
+  TipoMaquina,
+  ZonaMaquina,
+} from '../src/generated/prisma/client.js';
 import { aFechaLocal, hoyLocal, sumarDias } from '../src/common/fechas/fechas.js';
 
 const PASSWORD = 'Demo1234!';
@@ -117,9 +123,42 @@ async function crearClases() {
   console.log(`Clases de prueba: Spinning ${manana} 07:00, Yoga ${pasado} 18:00, Crossfit ${manana} 10:00 (cancelada)`);
 }
 
+/**
+ * Inventario inicial de máquinas (H17, DB-17.1): 12 máquinas, todas
+ * "Operativa". Usa el código como clave, así que correr el seed varias veces
+ * no duplica nada y tampoco pisa el estado que H18 haya registrado: `update`
+ * va vacío a propósito.
+ */
+async function crearMaquinas() {
+  const maquinas = [
+    { codigo: 'MAQ-001', nombre: 'Caminadora 1', tipo: TipoMaquina.CARDIO, zona: ZonaMaquina.PISO_1 },
+    { codigo: 'MAQ-002', nombre: 'Caminadora 2', tipo: TipoMaquina.CARDIO, zona: ZonaMaquina.PISO_1 },
+    { codigo: 'MAQ-003', nombre: 'Elíptica', tipo: TipoMaquina.CARDIO, zona: ZonaMaquina.PISO_1 },
+    { codigo: 'MAQ-004', nombre: 'Bicicleta estática', tipo: TipoMaquina.CARDIO, zona: ZonaMaquina.PISO_1 },
+    { codigo: 'MAQ-005', nombre: 'Remo', tipo: TipoMaquina.CARDIO, zona: ZonaMaquina.AREA_FUNCIONAL },
+    { codigo: 'MAQ-006', nombre: 'Prensa de piernas', tipo: TipoMaquina.FUERZA, zona: ZonaMaquina.PISO_2 },
+    { codigo: 'MAQ-007', nombre: 'Jalón al pecho', tipo: TipoMaquina.FUERZA, zona: ZonaMaquina.PISO_2 },
+    { codigo: 'MAQ-008', nombre: 'Extensión de cuádriceps', tipo: TipoMaquina.FUERZA, zona: ZonaMaquina.PISO_2 },
+    { codigo: 'MAQ-009', nombre: 'Banco de press plano', tipo: TipoMaquina.PESO_LIBRE, zona: ZonaMaquina.PISO_2 },
+    { codigo: 'MAQ-010', nombre: 'Rack de sentadillas', tipo: TipoMaquina.PESO_LIBRE, zona: ZonaMaquina.PISO_2 },
+    { codigo: 'MAQ-011', nombre: 'Estación de kettlebells', tipo: TipoMaquina.FUNCIONAL, zona: ZonaMaquina.AREA_FUNCIONAL },
+    { codigo: 'MAQ-012', nombre: 'Estación de TRX', tipo: TipoMaquina.FUNCIONAL, zona: ZonaMaquina.AREA_FUNCIONAL },
+  ];
+
+  for (const maquina of maquinas) {
+    await prisma.maquina.upsert({
+      where: { codigo: maquina.codigo },
+      update: {},
+      create: maquina,
+    });
+  }
+  console.log(`Inventario de máquinas: ${maquinas.length} máquinas operativas`);
+}
+
 try {
   await crearUsuarios();
   await crearClases();
+  await crearMaquinas();
 } finally {
   await prisma.$disconnect();
 }
