@@ -114,6 +114,7 @@ model Miembro {
 
   avisos Aviso[]
   membresias Membresia[]
+  cobros Cobro[]
 
   @@map("miembro")
 }
@@ -366,4 +367,50 @@ model MembresiaTipoClase {
 
   @@id([membresiaId, tipoClaseId])
   @@map("membresia_tipo_clase")
+}
+
+/// Concepto de un cobro (Módulo 5). H2 usa MEMBRESIA y RENOVACION; otras
+/// historias agregan sus valores (por ejemplo, sesiones personales).
+enum ConceptoCobro {
+  MEMBRESIA
+  RENOVACION
+
+  @@map("concepto_cobro")
+}
+
+/// Tipo del registro que origina un cobro (Módulo 5).
+enum ReferenciaCobro {
+  MEMBRESIA
+
+  @@map("referencia_cobro")
+}
+
+/// Estado de un cobro (Módulo 5). Se crea PENDIENTE; los estados de pago los
+/// agrega la historia que procesa los pagos.
+enum EstadoCobro {
+  PENDIENTE
+
+  @@map("estado_cobro")
+}
+
+/// Cobro que el miembro paga desde su cuenta (Módulo 5). Lo crea
+/// CobrosService.crearCobro() desde el módulo que origina el cobro (H2 al
+/// registrar una membresía).
+///
+/// El monto mayor que 0 vive como CHECK en la migración. Cada registro de
+/// origen tiene un solo cobro (índice único referencia_tipo + referencia_id).
+model Cobro {
+  id             String          @id @default(uuid()) @db.Uuid
+  miembroId      String          @map("miembro_id") @db.Uuid
+  miembro        Miembro         @relation(fields: [miembroId], references: [id])
+  concepto       ConceptoCobro
+  monto          Decimal         @db.Decimal(10, 2)
+  referenciaTipo ReferenciaCobro @map("referencia_tipo")
+  referenciaId   String          @map("referencia_id") @db.Uuid
+  estado         EstadoCobro     @default(PENDIENTE)
+  creadoEn       DateTime        @default(now()) @map("creado_en")
+
+  @@unique([referenciaTipo, referenciaId])
+  @@index([miembroId, estado])
+  @@map("cobro")
 }

@@ -62,6 +62,8 @@
       "@Membresias/*": ["./src/membresias/*/index.ts"],
       "@Miembros": ["./src/miembros/index.ts"],
       "@Miembros/*": ["./src/miembros/*/index.ts"],
+      "@Cobros": ["./src/cobros/index.ts"],
+      "@Cobros/*": ["./src/cobros/*/index.ts"],
     }
   }
 }

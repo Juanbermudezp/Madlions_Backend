@@ -6,7 +6,8 @@ import { MiembrosController } from './miembros.controller.js';
 
 describe('MiembrosController', () => {
     it('buscar solo lo usan RECEPCION, ADMINISTRADOR y ENTRENADOR (MIEMBRO recibe 403)', () => {
-        const roles = new Reflector().get<Rol[]>(ROLES_KEY, MiembrosController.prototype.buscar);
+        const metodo: keyof MiembrosController = 'buscar';
+        const roles = new Reflector().get<Rol[]>(ROLES_KEY, MiembrosController.prototype[metodo]);
         expect([...roles].sort()).toEqual([Rol.ADMINISTRADOR, Rol.ENTRENADOR, Rol.RECEPCION].sort());
         expect(roles).not.toContain(Rol.MIEMBRO);
     });
