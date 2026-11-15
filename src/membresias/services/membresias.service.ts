@@ -5,16 +5,19 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { MembresiaRepository } from '@Membresias/repositories';
+import { assertOwnership } from '@Common/ownership';
 import { hoyLocal } from '@Common/fechas';
 import { EstadoMembresia, type Membresia } from '@PrismaClient';
 import { calcularCobertura } from './reglas-cobertura.js';
 import { EstadoMembresiaService } from './estado-membresia.service.js';
-import type { EstadoMembresiaDetalle } from './reglas-estado.js';
+import { SIN_MEMBRESIA, type EstadoMembresiaDetalle } from './reglas-estado.js';
+import type { MembresiaDetalleResponseDto } from '@Membresias/dto';
 
 export const MEMBRESIA_NO_EXISTE = 'La membresía no existe.';
 export const MEMBRESIA_PAGADA_CON_OTRO_PAGO = 'La membresía ya fue pagada con otro pago.';
 export const REFERENCIA_PAGO_INVALIDA = 'La referencia del pago es obligatoria y puede tener hasta 100 caracteres.';
 export const REFERENCIA_PAGO_EN_USO = 'La referencia del pago ya se aplicó a otra membresía.';
+export const MEMBRESIA_DE_OTRO_MIEMBRO = 'No tienes permiso para ver esta membresía.';
 
 export interface ResultadoAplicarPago {
     /** false si la misma confirmación ya se había aplicado (no hizo nada). */
@@ -36,6 +39,45 @@ export class MembresiasService {
      */
     obtenerEstado(miembroId: string, fecha: string = hoyLocal()): Promise<EstadoMembresiaDetalle> {
         return this.estadoMembresiaService.obtenerEstado(miembroId, fecha);
+    }
+
+    /**
+     * H3 · Estado de la membresía del usuario autenticado. El miembro sale del
+     * token (`usuarioId`), nunca de un parámetro. Si el usuario no tiene ficha
+     * de miembro o nunca tuvo una membresía, responde SIN_MEMBRESIA.
+     */
+    async obtenerMiEstado(usuarioId: string, fecha: string = hoyLocal()): Promise<EstadoMembresiaDetalle> {
+        const miembroId = await this.membresiaRepository.findMiembroIdDeUsuario(usuarioId);
+        if (!miembroId) return { ...SIN_MEMBRESIA };
+        return this.obtenerEstado(miembroId, fecha);
+    }
+
+    /**
+     * H3 · Una membresía del usuario autenticado. La pertenencia se decide con
+     * el dueño leído de la base, no con datos del cliente.
+     *
+     * @throws {NotFoundException} si la membresía no existe.
+     * @throws {ForbiddenException} si es de otro miembro.
+     */
+    async obtenerMiMembresia(membresiaId: string, usuarioId: string): Promise<MembresiaDetalleResponseDto> {
+        const membresia = await this.membresiaRepository.findConDueno(membresiaId);
+        if (!membresia) throw new NotFoundException(MEMBRESIA_NO_EXISTE);
+        assertOwnership(membresia.miembro.usuarioId, usuarioId, MEMBRESIA_DE_OTRO_MIEMBRO);
+
+        const dia = (fecha: Date | null) => fecha?.toISOString().slice(0, 10) ?? null;
+        return {
+            id: membresia.id,
+            plan: membresia.nombrePlan,
+            tipoPlan: membresia.tipoPlan,
+            tipoOperacion: membresia.tipoOperacion,
+            estado: membresia.estado,
+            precio: membresia.precio.toNumber(),
+            cantidadClases: membresia.cantidadClases,
+            fechaInicioSolicitada: dia(membresia.fechaInicioSolicitada)!,
+            fechaInicio: dia(membresia.fechaInicio),
+            fechaVencimiento: dia(membresia.fechaVencimiento),
+            tiposClaseIds: membresia.tiposClase.map((t) => t.tipoClaseId),
+        };
     }
 
     /**

@@ -1,8 +1,9 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { MembresiaRepository } from '@Membresias/repositories';
 import type { EstadoMembresiaService } from './estado-membresia.service.js';
 import { EstadoMembresia, Prisma, TipoOperacionMembresia, TipoPlan, type Membresia } from '@PrismaClient';
 import {
+    MEMBRESIA_DE_OTRO_MIEMBRO,
     MEMBRESIA_NO_EXISTE,
     MEMBRESIA_PAGADA_CON_OTRO_PAGO,
     MembresiasService,
@@ -101,5 +102,74 @@ describe('MembresiasService.obtenerEstado', () => {
         const service = new MembresiasService({} as MembresiaRepository, estados as unknown as EstadoMembresiaService);
         await expect(service.obtenerEstado('m1', '2026-11-15')).resolves.toEqual({ estado: 'VIGENTE' });
         expect(estados.obtenerEstado).toHaveBeenCalledWith('m1', '2026-11-15');
+    });
+});
+
+describe('MembresiasService · membresía del usuario autenticado (H3)', () => {
+    const repo = { findMiembroIdDeUsuario: vi.fn(), findConDueno: vi.fn() };
+    const estados = { obtenerEstado: vi.fn() };
+    const service = new MembresiasService(
+        repo as unknown as MembresiaRepository,
+        estados as unknown as EstadoMembresiaService,
+    );
+
+    beforeEach(() => vi.resetAllMocks());
+
+    describe('obtenerMiEstado', () => {
+        it('busca el miembro del usuario del token y pide su estado', async () => {
+            repo.findMiembroIdDeUsuario.mockResolvedValue('m1');
+            estados.obtenerEstado.mockResolvedValue({ estado: 'VIGENTE' });
+
+            await expect(service.obtenerMiEstado('u1', '2026-11-15')).resolves.toEqual({ estado: 'VIGENTE' });
+            expect(repo.findMiembroIdDeUsuario).toHaveBeenCalledWith('u1');
+            expect(estados.obtenerEstado).toHaveBeenCalledWith('m1', '2026-11-15');
+        });
+
+        it('si el usuario no tiene ficha de miembro responde SIN_MEMBRESIA con todo lo demás en null', async () => {
+            repo.findMiembroIdDeUsuario.mockResolvedValue(null);
+
+            const estado = await service.obtenerMiEstado('u1');
+
+            expect(estado.estado).toBe('SIN_MEMBRESIA');
+            expect(Object.entries(estado).filter(([k, v]) => k !== 'estado' && v !== null)).toEqual([]);
+            expect(estados.obtenerEstado).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('obtenerMiMembresia', () => {
+        const propia = {
+            ...membresia({ estado: EstadoMembresia.PAGADA, fechaInicio: dia('2026-11-20'), fechaVencimiento: dia('2026-12-19') }),
+            miembro: { usuarioId: 'u1' },
+            tiposClase: [{ tipoClaseId: 't1' }],
+        };
+
+        it('devuelve la membresía si es del usuario autenticado', async () => {
+            repo.findConDueno.mockResolvedValue(propia);
+            await expect(service.obtenerMiMembresia('mem1', 'u1')).resolves.toEqual({
+                id: 'mem1',
+                plan: 'Mensual',
+                tipoPlan: 'MENSUAL',
+                tipoOperacion: 'COMPRA',
+                estado: 'PAGADA',
+                precio: 35.5,
+                cantidadClases: null,
+                fechaInicioSolicitada: '2026-11-20',
+                fechaInicio: '2026-11-20',
+                fechaVencimiento: '2026-12-19',
+                tiposClaseIds: ['t1'],
+            });
+        });
+
+        it('403 si la membresía es de otro miembro', async () => {
+            repo.findConDueno.mockResolvedValue(propia);
+            await expect(service.obtenerMiMembresia('mem1', 'otro-usuario')).rejects.toThrow(
+                new ForbiddenException(MEMBRESIA_DE_OTRO_MIEMBRO),
+            );
+        });
+
+        it('404 si la membresía no existe', async () => {
+            repo.findConDueno.mockResolvedValue(null);
+            await expect(service.obtenerMiMembresia('x', 'u1')).rejects.toThrow(new NotFoundException(MEMBRESIA_NO_EXISTE));
+        });
     });
 });
