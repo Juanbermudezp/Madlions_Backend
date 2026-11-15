@@ -36,6 +36,12 @@ export interface DatosMembresiaNueva {
     registradaPorId: string;
 }
 
+/** Membresía con el usuario dueño y sus tipos de clase (H3). */
+export type MembresiaConDueno = Membresia & {
+    miembro: { usuarioId: string };
+    tiposClase: { tipoClaseId: string }[];
+};
+
 /** Membresía con los datos que usa el cálculo del estado (BE-2.4). */
 export type MembresiaDeMiembro = MembresiaParaEstado & { miembroId: string };
 
@@ -105,6 +111,23 @@ export class MembresiaRepository {
             }
             throw error;
         }
+    }
+
+    /** Id del miembro que pertenece al usuario, o null si el usuario no es miembro. */
+    async findMiembroIdDeUsuario(usuarioId: string): Promise<string | null> {
+        const miembro = await this.prisma.miembro.findUnique({ where: { usuarioId }, select: { id: true } });
+        return miembro?.id ?? null;
+    }
+
+    /** Membresía con el usuario dueño (para comprobar la pertenencia) y sus tipos de clase. */
+    findConDueno(id: string): Promise<MembresiaConDueno | null> {
+        return this.prisma.membresia.findUnique({
+            where: { id },
+            include: {
+                miembro: { select: { usuarioId: true } },
+                tiposClase: { select: { tipoClaseId: true } },
+            },
+        });
     }
 
     findById(id: string): Promise<Membresia | null> {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import {
     ApiBadRequestResponse,
     ApiBearerAuth,
@@ -7,12 +7,15 @@ import {
     ApiForbiddenResponse,
     ApiNotFoundResponse,
     ApiOkResponse,
+    ApiUnauthorizedResponse,
     ApiOperation,
     ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser, Roles } from '@Auth/decorators';
-import { RegistroMembresiaService } from '@Membresias/services';
+import { MembresiasService, RegistroMembresiaService } from '@Membresias/services';
 import {
+    EstadoMembresiaResponseDto,
+    MembresiaDetalleResponseDto,
     MembresiaRegistradaResponseDto,
     OperacionMembresiaDto,
     ResumenMembresiaResponseDto,
@@ -20,14 +23,18 @@ import {
 import { Rol, type User } from '@PrismaClient';
 
 /**
- * Compra o renovación de membresías (H2, BE-2.3). Solo recepción registra;
- * los demás roles reciben 403.
+ * Membresías. Compra o renovación (H2, BE-2.3): solo recepción registra.
+ * Consulta de la membresía propia (H3): solo el miembro, siempre la suya.
+ * Los demás roles reciben 403.
  */
 @ApiTags('membresias')
 @ApiBearerAuth()
 @Controller('membresias')
 export class MembresiasController {
-    constructor(private readonly registroService: RegistroMembresiaService) { }
+    constructor(
+        private readonly registroService: RegistroMembresiaService,
+        private readonly membresiasService: MembresiasService,
+    ) { }
 
     @Get('resumen')
     @Roles(Rol.RECEPCION)
@@ -39,6 +46,32 @@ export class MembresiasController {
     @ApiConflictResponse({ description: 'Plan inactivo u operación pendiente de pago.' })
     resumen(@Query() query: OperacionMembresiaDto): Promise<ResumenMembresiaResponseDto> {
         return this.registroService.resumen(query);
+    }
+
+    // `mia` va antes de `:id`, y `:id` exige un UUID, para que nunca se confundan.
+    @Get('mia')
+    @Roles(Rol.MIEMBRO)
+    @ApiOperation({ summary: 'Estado de la membresía del miembro autenticado (el miembro sale del token)' })
+    @ApiOkResponse({ type: EstadoMembresiaResponseDto })
+    @ApiUnauthorizedResponse({ description: 'Sin sesión.' })
+    @ApiForbiddenResponse({ description: 'El usuario no es miembro.' })
+    obtenerMia(@CurrentUser() user: User): Promise<EstadoMembresiaResponseDto> {
+        return this.membresiasService.obtenerMiEstado(user.id);
+    }
+
+    @Get(':id')
+    @Roles(Rol.MIEMBRO)
+    @ApiOperation({ summary: 'Una membresía propia del miembro autenticado' })
+    @ApiOkResponse({ type: MembresiaDetalleResponseDto })
+    @ApiBadRequestResponse({ description: 'Id inválido.' })
+    @ApiUnauthorizedResponse({ description: 'Sin sesión.' })
+    @ApiForbiddenResponse({ description: 'La membresía es de otro miembro, o el usuario no es miembro.' })
+    @ApiNotFoundResponse({ description: 'La membresía no existe.' })
+    obtenerUna(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUser() user: User,
+    ): Promise<MembresiaDetalleResponseDto> {
+        return this.membresiasService.obtenerMiMembresia(id, user.id);
     }
 
     @Post()

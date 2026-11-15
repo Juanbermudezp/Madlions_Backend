@@ -52,7 +52,8 @@ export interface EstadoMembresiaDetalle {
     creditosTotales: number | null;
     /** Créditos del set − reservas confirmadas de esa membresía; null si no es set. */
     creditosDisponibles: number | null;
-    tiposClaseIds: string[];
+    /** Tipos de clase incluidos; null en SIN_MEMBRESIA. */
+    tiposClaseIds: string[] | null;
     renovacion: RenovacionPendiente | null;
 }
 
@@ -66,7 +67,7 @@ export const SIN_MEMBRESIA: EstadoMembresiaDetalle = {
     diasRestantes: null,
     creditosTotales: null,
     creditosDisponibles: null,
-    tiposClaseIds: [],
+    tiposClaseIds: null,
     renovacion: null,
 };
 
@@ -187,5 +188,5 @@ export function calcularEstadoMembresia(
     const ultima = [...pagadas].sort((a, b) => b.vencimiento.localeCompare(a.vencimiento))[0];
     if (ultima) return detalle('VENCIDA', ultima.membresia, ultima, null, null);
 
-    return { ...SIN_MEMBRESIA, tiposClaseIds: [] };
+    return { ...SIN_MEMBRESIA };
 }
