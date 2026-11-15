@@ -94,6 +94,7 @@ model User {
   miembro       Miembro?
   bloquesDisponibilidad BloqueDisponibilidad[]
   clases                Clase[]
+  membresiasRegistradas Membresia[]
   @@map("usuario")
 }
 
@@ -112,6 +113,7 @@ model Miembro {
   registrosProgreso RegistroProgreso[] 
 
   avisos Aviso[]
+  membresias Membresia[]
 
   @@map("miembro")
 }
@@ -161,6 +163,7 @@ model TipoClase {
 
   clases Clase[]
   planes PlanTipoClase[]
+  membresias MembresiaTipoClase[]
 
   @@map("tipo_clase")
 }
@@ -272,6 +275,7 @@ model Plan {
   actualizadoEn  DateTime @updatedAt @map("actualizado_en")
 
   tiposClase PlanTipoClase[]
+  membresias Membresia[]
 
   @@map("plan")
 }
@@ -295,4 +299,71 @@ model Configuracion {
   actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
 
   @@map("configuracion")
+}
+
+/// Operación con la que se registró una membresía (H2).
+enum TipoOperacionMembresia {
+  COMPRA
+  RENOVACION
+
+  @@map("tipo_operacion_membresia")
+}
+
+/// Estado de pago de una membresía (H2). Las fechas de vigencia se fijan al
+/// pasar a PAGADA.
+enum EstadoMembresia {
+  PENDIENTE_PAGO
+  PAGADA
+
+  @@map("estado_membresia")
+}
+
+/// Membresía comprada o renovada por un miembro (H2).
+///
+/// Guarda una copia de las condiciones del plan al momento de la compra
+/// (nombre, tipo, precio, cantidad de clases y tipos de clase), así editar o
+/// desactivar el plan (H1) no la altera.
+///
+/// Viven como CHECK o índice en la migración: precio mayor que 0,
+/// cantidad_clases según el tipo de plan, fechas de vigencia nulas hasta el
+/// pago, una renovación siempre apunta a la membresía anterior, y el índice
+/// único parcial que permite una sola membresía PENDIENTE_PAGO por miembro.
+model Membresia {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  miembroId             String                 @map("miembro_id") @db.Uuid
+  miembro               Miembro                @relation(fields: [miembroId], references: [id])
+  planId                String                 @map("plan_id") @db.Uuid
+  plan                  Plan                   @relation(fields: [planId], references: [id])
+  nombrePlan            String                 @map("nombre_plan") @db.VarChar(60)
+  tipoPlan              TipoPlan               @map("tipo_plan")
+  precio                Decimal                @db.Decimal(10, 2)
+  cantidadClases        Int?                   @map("cantidad_clases")
+  tipoOperacion         TipoOperacionMembresia @map("tipo_operacion")
+  membresiaAnteriorId   String?                @map("membresia_anterior_id") @db.Uuid
+  membresiaAnterior     Membresia?             @relation("RenovacionMembresia", fields: [membresiaAnteriorId], references: [id], onDelete: Restrict)
+  renovaciones          Membresia[]            @relation("RenovacionMembresia")
+  estado                EstadoMembresia        @default(PENDIENTE_PAGO)
+  fechaInicioSolicitada DateTime               @map("fecha_inicio_solicitada") @db.Date
+  fechaInicio           DateTime?              @map("fecha_inicio") @db.Date
+  fechaVencimiento      DateTime?              @map("fecha_vencimiento") @db.Date
+  registradaPorId       String                 @map("registrada_por") @db.Uuid
+  registradaPor         User                   @relation(fields: [registradaPorId], references: [id])
+  pagoAplicadoRef       String?                @unique @map("pago_aplicado_ref") @db.VarChar(100)
+  creadoEn              DateTime               @default(now()) @map("creado_en")
+
+  tiposClase MembresiaTipoClase[]
+
+  @@index([miembroId, estado])
+  @@map("membresia")
+}
+
+/// Tipos de clase incluidos en la membresía, copiados del plan al comprarla (H2).
+model MembresiaTipoClase {
+  membresiaId String    @map("membresia_id") @db.Uuid
+  membresia   Membresia @relation(fields: [membresiaId], references: [id], onDelete: Cascade)
+  tipoClaseId String    @map("tipo_clase_id") @db.Uuid
+  tipoClase   TipoClase @relation(fields: [tipoClaseId], references: [id])
+
+  @@id([membresiaId, tipoClaseId])
+  @@map("membresia_tipo_clase")
 }
