@@ -5,8 +5,11 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { MembresiaRepository } from '@Membresias/repositories';
+import { hoyLocal } from '@Common/fechas';
 import { EstadoMembresia, type Membresia } from '@PrismaClient';
 import { calcularCobertura } from './reglas-cobertura.js';
+import { EstadoMembresiaService } from './estado-membresia.service.js';
+import type { EstadoMembresiaDetalle } from './reglas-estado.js';
 
 export const MEMBRESIA_NO_EXISTE = 'La membresía no existe.';
 export const MEMBRESIA_PAGADA_CON_OTRO_PAGO = 'La membresía ya fue pagada con otro pago.';
@@ -22,7 +25,18 @@ export interface ResultadoAplicarPago {
 /** Operaciones sobre membresías que piden otros módulos (H2). */
 @Injectable()
 export class MembresiasService {
-    constructor(private readonly membresiaRepository: MembresiaRepository) { }
+    constructor(
+        private readonly membresiaRepository: MembresiaRepository,
+        private readonly estadoMembresiaService: EstadoMembresiaService,
+    ) { }
+
+    /**
+     * BE-2.4 · Estado de la membresía de un miembro para los módulos 2, 3, 4 y
+     * 9. `fecha` en AAAA-MM-DD, hora de El Salvador (por defecto, hoy).
+     */
+    obtenerEstado(miembroId: string, fecha: string = hoyLocal()): Promise<EstadoMembresiaDetalle> {
+        return this.estadoMembresiaService.obtenerEstado(miembroId, fecha);
+    }
 
     /**
      * BE-2.5 · Lo llama el Módulo 5 cuando se aprueba el pago de una

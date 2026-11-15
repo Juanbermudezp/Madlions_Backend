@@ -19,7 +19,7 @@ describe('MiembrosService.buscar', () => {
         repo.buscar.mockResolvedValue([maria, pedro]);
         estados.estadosDe.mockResolvedValue(
             new Map([
-                ['m1', { estado: 'ACTIVA', fechaVencimiento: '2026-11-30' }],
+                ['m1', { estado: 'VIGENTE', fechaVencimiento: '2026-11-30' }],
                 ['m2', { estado: 'SIN_MEMBRESIA', fechaVencimiento: null }],
             ]),
         );
@@ -34,7 +34,7 @@ describe('MiembrosService.buscar', () => {
         const lista = await service.buscar('maria', rol);
         expect(estados.estadosDe).toHaveBeenCalledWith(['m1', 'm2']);
         expect(lista).toEqual([
-            { ...maria, estadoMembresia: 'ACTIVA', fechaVencimiento: '2026-11-30' },
+            { ...maria, estadoMembresia: 'VIGENTE', fechaVencimiento: '2026-11-30' },
             { ...pedro, estadoMembresia: 'SIN_MEMBRESIA', fechaVencimiento: null },
         ]);
     });

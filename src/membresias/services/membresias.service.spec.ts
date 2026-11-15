@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import type { MembresiaRepository } from '@Membresias/repositories';
+import type { EstadoMembresiaService } from './estado-membresia.service.js';
 import { EstadoMembresia, Prisma, TipoOperacionMembresia, TipoPlan, type Membresia } from '@PrismaClient';
 import {
     MEMBRESIA_NO_EXISTE,
@@ -35,7 +36,7 @@ const PAGO = new Date('2026-11-15T10:00:00-06:00');
 
 describe('MembresiasService.aplicarPago', () => {
     const repo = { findById: vi.fn(), marcarPagada: vi.fn() };
-    const service = new MembresiasService(repo as unknown as MembresiaRepository);
+    const service = new MembresiasService(repo as unknown as MembresiaRepository, {} as EstadoMembresiaService);
 
     beforeEach(() => vi.resetAllMocks());
 
@@ -91,5 +92,14 @@ describe('MembresiasService.aplicarPago', () => {
     it.each(['', '   ', 'x'.repeat(101)])('400 con una referencia inválida (%j)', async (ref) => {
         await expect(service.aplicarPago('mem1', ref, PAGO)).rejects.toThrow(new BadRequestException(REFERENCIA_PAGO_INVALIDA));
         expect(repo.findById).not.toHaveBeenCalled();
+    });
+});
+
+describe('MembresiasService.obtenerEstado', () => {
+    it('delega en EstadoMembresiaService con la fecha indicada', async () => {
+        const estados = { obtenerEstado: vi.fn().mockResolvedValue({ estado: 'VIGENTE' }) };
+        const service = new MembresiasService({} as MembresiaRepository, estados as unknown as EstadoMembresiaService);
+        await expect(service.obtenerEstado('m1', '2026-11-15')).resolves.toEqual({ estado: 'VIGENTE' });
+        expect(estados.obtenerEstado).toHaveBeenCalledWith('m1', '2026-11-15');
     });
 });

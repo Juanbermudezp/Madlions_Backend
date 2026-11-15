@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
 import { MembresiaPendienteError } from '@Membresias/errors';
+import type { MembresiaParaEstado } from '../services/reglas-estado.js';
 import {
     EstadoMembresia,
     Prisma,
@@ -35,13 +36,8 @@ export interface DatosMembresiaNueva {
     registradaPorId: string;
 }
 
-/** Datos de una membresía que se usan para calcular el estado del miembro. */
-export interface VigenciaMembresia {
-    miembroId: string;
-    estado: EstadoMembresia;
-    fechaInicio: Date | null;
-    fechaVencimiento: Date | null;
-}
+/** Membresía con los datos que usa el cálculo del estado (BE-2.4). */
+export type MembresiaDeMiembro = MembresiaParaEstado & { miembroId: string };
 
 /** Único punto que habla con las tablas `membresia` y `membresia_tipo_clase`. */
 @Injectable()
@@ -150,11 +146,37 @@ export class MembresiaRepository {
     }
 
     /** Membresías de varios miembros, con lo necesario para calcular su estado. */
-    findVigenciasDe(miembroIds: string[]): Promise<VigenciaMembresia[]> {
-        if (miembroIds.length === 0) return Promise.resolve([]);
-        return this.prisma.membresia.findMany({
+    async findParaEstado(miembroIds: string[]): Promise<MembresiaDeMiembro[]> {
+        if (miembroIds.length === 0) return [];
+        const filas = await this.prisma.membresia.findMany({
             where: { miembroId: { in: miembroIds } },
-            select: { miembroId: true, estado: true, fechaInicio: true, fechaVencimiento: true },
+            select: {
+                id: true,
+                miembroId: true,
+                estado: true,
+                nombrePlan: true,
+                tipoPlan: true,
+                cantidadClases: true,
+                fechaInicioSolicitada: true,
+                fechaInicio: true,
+                fechaVencimiento: true,
+                tiposClase: { select: { tipoClaseId: true } },
+            },
         });
+        return filas.map(({ tiposClase, ...m }) => ({
+            ...m,
+            tiposClaseIds: tiposClase.map((t) => t.tipoClaseId),
+        }));
+    }
+
+    /**
+     * Reservas CONFIRMADA de cada membresía, para los créditos disponibles.
+     *
+     * La tabla `reserva` llega con H5. Mientras no exista, ninguna membresía
+     * tiene reservas; cuando exista, este es el único método que cambia:
+     * contar las reservas CONFIRMADA por membresía con un groupBy.
+     */
+    contarReservasConfirmadas(membresiaIds: string[]): Promise<Map<string, number>> {
+        return Promise.resolve(new Map(membresiaIds.map((id) => [id, 0])));
     }
 }
