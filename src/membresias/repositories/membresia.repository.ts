@@ -111,6 +111,44 @@ export class MembresiaRepository {
         }
     }
 
+    findById(id: string): Promise<Membresia | null> {
+        return this.prisma.membresia.findUnique({ where: { id } });
+    }
+
+    /**
+     * Pasa la membresía a PAGADA con su cobertura y la referencia del pago,
+     * solo si sigue PENDIENTE_PAGO.
+     *
+     * @returns la membresía pagada; null si ya no estaba pendiente; o
+     *   'REFERENCIA_EN_USO' si la referencia ya se aplicó a otra membresía.
+     */
+    async marcarPagada(
+        id: string,
+        pagoAplicadoRef: string,
+        cobertura: { fechaInicio: string; fechaVencimiento: string },
+    ): Promise<Membresia | null | 'REFERENCIA_EN_USO'> {
+        try {
+            const { count } = await this.prisma.membresia.updateMany({
+                where: { id, estado: EstadoMembresia.PENDIENTE_PAGO },
+                data: {
+                    estado: EstadoMembresia.PAGADA,
+                    pagoAplicadoRef,
+                    fechaInicio: new Date(`${cobertura.fechaInicio}T00:00:00Z`),
+                    fechaVencimiento: new Date(`${cobertura.fechaVencimiento}T00:00:00Z`),
+                },
+            });
+            return count === 0 ? null : this.prisma.membresia.findUniqueOrThrow({ where: { id } });
+        } catch (error) {
+            if (
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                error.code === UNIQUE_CONSTRAINT_VIOLATION
+            ) {
+                return 'REFERENCIA_EN_USO';
+            }
+            throw error;
+        }
+    }
+
     /** Membresías de varios miembros, con lo necesario para calcular su estado. */
     findVigenciasDe(miembroIds: string[]): Promise<VigenciaMembresia[]> {
         if (miembroIds.length === 0) return Promise.resolve([]);
