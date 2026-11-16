@@ -13,5 +13,7 @@ export class CobroResponseDto {
     habilitado!: boolean;
     @ApiProperty({ type: String, nullable: true, example: '2026-11-24', description: 'AAAA-MM-DD; null = desde que se generó.' })
     habilitadoDesde!: string | null;
+    @ApiProperty({ type: String, nullable: true, example: '2026-11-15T22:30:00.000Z', description: 'Fecha y hora del pago; null si está pendiente.' })
+    pagadoEn!: string | null;
     @ApiProperty({ type: String, nullable: true, example: 'CMP-000001' }) comprobanteNumero!: string | null;
 }

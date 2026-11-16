@@ -116,7 +116,7 @@ describe('CobrosService.listarMios', () => {
             cobro({ id: 'compra' }),
             cobro({ id: 'renovacion-hoy', concepto: 'RENOVACION', habilitadoDesde: dia('2026-11-15') }),
             cobro({ id: 'renovacion-futura', concepto: 'RENOVACION', habilitadoDesde: dia('2026-11-16') }),
-            cobro({ id: 'pagado', estado: 'PAGADO', pagadoEn: new Date(), comprobante: { numero: 'CMP-000001' } }),
+            cobro({ id: 'pagado', estado: 'PAGADO', pagadoEn: new Date('2026-11-14T22:30:00Z'), comprobante: { numero: 'CMP-000001' } }),
         ]);
 
         const lista = await service.listarMios('u1', undefined, '2026-11-15');
@@ -129,6 +129,7 @@ describe('CobrosService.listarMios', () => {
             estado: 'PENDIENTE',
             habilitado: true,
             habilitadoDesde: null,
+            pagadoEn: null,
             comprobanteNumero: null,
         });
         expect(lista.map((c) => [c.id, c.habilitado, c.habilitadoDesde, c.comprobanteNumero])).toEqual([
@@ -137,5 +138,6 @@ describe('CobrosService.listarMios', () => {
             ['renovacion-futura', false, '2026-11-16', null],
             ['pagado', false, null, 'CMP-000001'],
         ]);
+        expect(lista[3].pagadoEn).toBe('2026-11-14T22:30:00.000Z');
     });
 });

@@ -108,6 +108,7 @@ export class CobrosService {
             estado: cobro.estado,
             habilitado: estaHabilitado(cobro, hoy),
             habilitadoDesde: cobro.habilitadoDesde ? aDia(cobro.habilitadoDesde) : null,
+            pagadoEn: cobro.pagadoEn?.toISOString() ?? null,
             comprobanteNumero: cobro.comprobante?.numero ?? null,
         }));
     }
