@@ -12,13 +12,11 @@ import { BloquesModule } from '@Bloques';
 import { ClasesModule } from '@Clases';
 import { PlanesModule } from '@Planes';
 import { ConfiguracionModule } from '@Configuracion';
-<<<<<<< HEAD
 import { EntrenadoresModule } from '@Entrenadores';
-=======
 import { MiembrosModule } from '@Miembros';
 import { MembresiasModule } from '@Membresias';
 import { CobrosModule } from '@Cobros';
->>>>>>> develop
+import { SesionesModule } from '@Sesiones';
 
 @Module({
   imports: [
@@ -36,13 +34,11 @@ import { CobrosModule } from '@Cobros';
     ProgresoModule,
     PlanesModule,
     ConfiguracionModule,
-<<<<<<< HEAD
     EntrenadoresModule,
-=======
     MiembrosModule,
     MembresiasModule,
     CobrosModule,
->>>>>>> develop
+    SesionesModule,
   ],
   providers: [
     {

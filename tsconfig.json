@@ -58,17 +58,16 @@
       "@Planes/*": ["./src/planes/*/index.ts"],
       "@Configuracion": ["./src/configuracion/index.ts"],
       "@Configuracion/*": ["./src/configuracion/*/index.ts"],
-<<<<<<< HEAD
       "@Entrenadores": ["./src/entrenadores/index.ts"],
       "@Entrenadores/*": ["./src/entrenadores/*/index.ts"],
-=======
       "@Membresias": ["./src/membresias/index.ts"],
       "@Membresias/*": ["./src/membresias/*/index.ts"],
       "@Miembros": ["./src/miembros/index.ts"],
       "@Miembros/*": ["./src/miembros/*/index.ts"],
       "@Cobros": ["./src/cobros/index.ts"],
       "@Cobros/*": ["./src/cobros/*/index.ts"],
->>>>>>> develop
+      "@Sesiones": ["./src/sesiones/index.ts"],
+      "@Sesiones/*": ["./src/sesiones/*/index.ts"],
     }
   }
 }
