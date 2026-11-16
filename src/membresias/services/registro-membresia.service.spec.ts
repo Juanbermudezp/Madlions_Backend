@@ -144,9 +144,11 @@ describe('RegistroMembresiaService', () => {
                 {
                     miembroId: 'm1',
                     concepto: ConceptoCobro.MEMBRESIA,
+                    detalle: 'Mensual ilimitado',
                     monto: new Prisma.Decimal('35.50'),
                     referenciaTipo: ReferenciaCobro.MEMBRESIA,
                     referenciaId: 'mem1',
+                    habilitadoDesde: null,
                 },
                 tx,
             );
@@ -168,7 +170,11 @@ describe('RegistroMembresiaService', () => {
                 membresiaAnteriorId: 'anterior',
                 fechaInicioSolicitada: new Date('2026-12-01T00:00:00Z'),
             });
-            expect(cobros.crearCobro.mock.calls[0][0].concepto).toBe(ConceptoCobro.RENOVACION);
+            expect(cobros.crearCobro.mock.calls[0][0]).toMatchObject({
+                concepto: ConceptoCobro.RENOVACION,
+                // Se paga desde el vencimiento de la membresía actual (S3).
+                habilitadoDesde: new Date('2026-11-30T00:00:00Z'),
+            });
             expect(respuesta.tipoOperacion).toBe('RENOVACION');
         });
 

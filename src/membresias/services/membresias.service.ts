@@ -3,11 +3,13 @@ import {
     ConflictException,
     Injectable,
     NotFoundException,
+    type OnModuleInit,
 } from '@nestjs/common';
+import { CobrosService } from '@Cobros/services';
 import { MembresiaRepository } from '@Membresias/repositories';
 import { assertOwnership } from '@Common/ownership';
 import { hoyLocal } from '@Common/fechas';
-import { EstadoMembresia, type Membresia } from '@PrismaClient';
+import { EstadoMembresia, ReferenciaCobro, type Membresia, type Prisma } from '@PrismaClient';
 import { calcularCobertura } from './reglas-cobertura.js';
 import { EstadoMembresiaService } from './estado-membresia.service.js';
 import { SIN_MEMBRESIA, type EstadoMembresiaDetalle } from './reglas-estado.js';
@@ -27,11 +29,23 @@ export interface ResultadoAplicarPago {
 
 /** Operaciones sobre membresías que piden otros módulos (H2). */
 @Injectable()
-export class MembresiasService {
+export class MembresiasService implements OnModuleInit {
     constructor(
         private readonly membresiaRepository: MembresiaRepository,
         private readonly estadoMembresiaService: EstadoMembresiaService,
+        private readonly cobrosService: CobrosService,
     ) { }
+
+    /**
+     * H12 · Cuando el Módulo 5 confirma el pago de un cobro de membresía, la
+     * activa o renueva con aplicarPago(), dentro de la misma transacción del
+     * pago: si algo falla, no queda ni el cobro pagado ni la membresía activa.
+     */
+    onModuleInit(): void {
+        this.cobrosService.registrarConfirmacion(ReferenciaCobro.MEMBRESIA, async (pago, tx) => {
+            await this.aplicarPago(pago.referenciaId, pago.referenciaPago, pago.fechaPago, tx);
+        });
+    }
 
     /**
      * BE-2.4 · Estado de la membresía de un miembro para los módulos 2, 3, 4 y
@@ -98,13 +112,14 @@ export class MembresiasService {
         membresiaId: string,
         referenciaPago: string,
         fechaPago: Date,
+        tx?: Prisma.TransactionClient,
     ): Promise<ResultadoAplicarPago> {
         const referencia = referenciaPago?.trim() ?? '';
         if (referencia.length < 1 || referencia.length > 100) {
             throw new BadRequestException(REFERENCIA_PAGO_INVALIDA);
         }
 
-        const actual = await this.membresiaRepository.findById(membresiaId);
+        const actual = await this.membresiaRepository.findById(membresiaId, tx);
         if (!actual) throw new NotFoundException(MEMBRESIA_NO_EXISTE);
         if (actual.estado !== EstadoMembresia.PENDIENTE_PAGO) {
             return this.yaPagada(actual, referencia);
@@ -116,12 +131,12 @@ export class MembresiasService {
             actual.tipoPlan,
         );
 
-        const pagada = await this.membresiaRepository.marcarPagada(membresiaId, referencia, cobertura);
+        const pagada = await this.membresiaRepository.marcarPagada(membresiaId, referencia, cobertura, tx);
         if (pagada === 'REFERENCIA_EN_USO') throw new ConflictException(REFERENCIA_PAGO_EN_USO);
         if (pagada) return { aplicado: true, membresia: pagada };
 
         // Otra confirmación la pagó entre la lectura y la actualización.
-        const despues = await this.membresiaRepository.findById(membresiaId);
+        const despues = await this.membresiaRepository.findById(membresiaId, tx);
         if (!despues) throw new NotFoundException(MEMBRESIA_NO_EXISTE);
         return this.yaPagada(despues, referencia);
     }

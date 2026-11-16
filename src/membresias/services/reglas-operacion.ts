@@ -26,6 +26,8 @@ export interface DatosOperacion {
 export interface OperacionMembresia {
     tipoOperacion: TipoOperacionMembresia;
     membresiaAnteriorId: string | null;
+    /** AAAA-MM-DD: vencimiento de la membresía que se renueva (null en una compra). */
+    vencimientoAnterior: string | null;
     fechaInicio: string;
     fechaVencimiento: string;
     /** true si la fecha la fijó el sistema (renovación de una membresía vigente). */
@@ -77,6 +79,7 @@ export function determinarOperacion(datos: DatosOperacion): ResultadoOperacion {
         operacion: {
             tipoOperacion: anterior ? TipoOperacionMembresia.RENOVACION : TipoOperacionMembresia.COMPRA,
             membresiaAnteriorId: anterior?.id ?? null,
+            vencimientoAnterior: anterior ? aDia(anterior.fechaVencimiento) : null,
             fechaInicio,
             fechaVencimiento: sumarDias(fechaInicio, duracionDias - 1),
             fechaInicioFija,

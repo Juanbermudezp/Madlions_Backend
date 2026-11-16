@@ -130,8 +130,8 @@ export class MembresiaRepository {
         });
     }
 
-    findById(id: string): Promise<Membresia | null> {
-        return this.prisma.membresia.findUnique({ where: { id } });
+    findById(id: string, tx?: Prisma.TransactionClient): Promise<Membresia | null> {
+        return (tx ?? this.prisma).membresia.findUnique({ where: { id } });
     }
 
     /**
@@ -145,9 +145,11 @@ export class MembresiaRepository {
         id: string,
         pagoAplicadoRef: string,
         cobertura: { fechaInicio: string; fechaVencimiento: string },
+        tx?: Prisma.TransactionClient,
     ): Promise<Membresia | null | 'REFERENCIA_EN_USO'> {
+        const db = tx ?? this.prisma;
         try {
-            const { count } = await this.prisma.membresia.updateMany({
+            const { count } = await db.membresia.updateMany({
                 where: { id, estado: EstadoMembresia.PENDIENTE_PAGO },
                 data: {
                     estado: EstadoMembresia.PAGADA,
@@ -156,7 +158,7 @@ export class MembresiaRepository {
                     fechaVencimiento: new Date(`${cobertura.fechaVencimiento}T00:00:00Z`),
                 },
             });
-            return count === 0 ? null : this.prisma.membresia.findUniqueOrThrow({ where: { id } });
+            return count === 0 ? null : db.membresia.findUniqueOrThrow({ where: { id } });
         } catch (error) {
             if (
                 error instanceof Prisma.PrismaClientKnownRequestError &&

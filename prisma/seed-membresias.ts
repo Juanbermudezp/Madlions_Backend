@@ -112,6 +112,11 @@ export async function cargarMembresiasDePrueba(
 
   // Se borran y recrean sus membresías y cobros, con fechas relativas a hoy.
   const miembroIds = Object.values(ids);
+  // Si alguno de estos miembros ya pagó (H12), primero van sus comprobantes e
+  // intentos: la base no deja borrar un cobro que tiene historial de pagos.
+  const deEstosMiembros = { cobro: { miembroId: { in: miembroIds } } };
+  await prisma.comprobante.deleteMany({ where: deEstosMiembros });
+  await prisma.intentoPago.deleteMany({ where: deEstosMiembros });
   await prisma.cobro.deleteMany({ where: { miembroId: { in: miembroIds } } });
   await prisma.membresia.deleteMany({ where: { miembroId: { in: miembroIds }, membresiaAnteriorId: { not: null } } });
   await prisma.membresia.deleteMany({ where: { miembroId: { in: miembroIds } } });
@@ -124,6 +129,8 @@ export async function cargarMembresiasDePrueba(
       pagada: boolean;
       operacion?: TipoOperacionMembresia;
       anteriorId?: string;
+      /** AAAA-MM-DD: vencimiento de la membresía que se renueva. */
+      vencimientoAnterior?: string;
     },
   ) => {
     const inicio = sumarDias(hoy, opciones.inicio);
@@ -151,9 +158,11 @@ export async function cargarMembresiasDePrueba(
           miembroId: ids[caso],
           concepto:
             membresia.tipoOperacion === TipoOperacionMembresia.RENOVACION ? ConceptoCobro.RENOVACION : ConceptoCobro.MEMBRESIA,
+          detalle: p.nombre,
           monto: p.precio,
           referenciaTipo: 'MEMBRESIA',
           referenciaId: membresia.id,
+          habilitadoDesde: opciones.vencimientoAnterior ? fecha(opciones.vencimientoAnterior) : null,
         },
       });
     }
@@ -177,6 +186,7 @@ export async function cargarMembresiasDePrueba(
     pagada: false,
     operacion: TipoOperacionMembresia.RENOVACION,
     anteriorId: actual.id,
+    vencimientoAnterior: actual.fechaVencimiento!.toISOString().slice(0, 10),
   });
   // Próxima a vencer (vence en 1 día) con la renovación ya pagada.
   const porVencer = await crear('renovacionPagada', mensual, { inicio: -28, pagada: true });

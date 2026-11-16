@@ -369,11 +369,12 @@ model MembresiaTipoClase {
   @@map("membresia_tipo_clase")
 }
 
-/// Concepto de un cobro (Módulo 5). H2 usa MEMBRESIA y RENOVACION; otras
-/// historias agregan sus valores (por ejemplo, sesiones personales).
+/// Concepto de un cobro (Módulo 5): compra de membresía y renovación (H2) o
+/// sesión adicional con un entrenador (H9).
 enum ConceptoCobro {
   MEMBRESIA
   RENOVACION
+  SESION_ADICIONAL
 
   @@map("concepto_cobro")
 }
@@ -381,14 +382,16 @@ enum ConceptoCobro {
 /// Tipo del registro que origina un cobro (Módulo 5).
 enum ReferenciaCobro {
   MEMBRESIA
+  SESION
 
   @@map("referencia_cobro")
 }
 
-/// Estado de un cobro (Módulo 5). Se crea PENDIENTE; los estados de pago los
-/// agrega la historia que procesa los pagos.
+/// Estado de un cobro (Módulo 5). Se crea PENDIENTE y pasa a PAGADO cuando
+/// la pasarela aprueba un intento de pago (H12).
 enum EstadoCobro {
   PENDIENTE
+  PAGADO
 
   @@map("estado_cobro")
 }
@@ -404,13 +407,70 @@ model Cobro {
   miembroId      String          @map("miembro_id") @db.Uuid
   miembro        Miembro         @relation(fields: [miembroId], references: [id])
   concepto       ConceptoCobro
+  /// Plan de la membresía, o fecha y entrenador de la sesión (H12).
+  detalle        String          @db.VarChar(150)
   monto          Decimal         @db.Decimal(10, 2)
   referenciaTipo ReferenciaCobro @map("referencia_tipo")
   referenciaId   String          @map("referencia_id") @db.Uuid
+  /// Desde cuándo se puede pagar (renovaciones, supuesto S3); null = desde que se genera.
+  habilitadoDesde DateTime?      @map("habilitado_desde") @db.Date
   estado         EstadoCobro     @default(PENDIENTE)
+  pagadoEn       DateTime?       @map("pagado_en")
   creadoEn       DateTime        @default(now()) @map("creado_en")
+
+  intentos    IntentoPago[]
+  comprobante Comprobante?
 
   @@unique([referenciaTipo, referenciaId])
   @@index([miembroId, estado])
   @@map("cobro")
+}
+
+/// Resultado de un intento de pago en la pasarela simulada (H12).
+enum ResultadoPago {
+  APROBADO
+  RECHAZADO
+  ERROR
+
+  @@map("resultado_pago")
+}
+
+/// Intento de pago de un cobro en la pasarela simulada (H12).
+///
+/// Nunca guarda el número completo de la tarjeta ni el código de seguridad:
+/// solo los últimos 4 dígitos. El formato de `ultimos4` (4 dígitos) y de
+/// `referencia` (PAY-AAAAMMDD-XXXXXX) viven como CHECK en la migración.
+model IntentoPago {
+  id         String        @id @default(uuid()) @db.Uuid
+  cobroId    String        @map("cobro_id") @db.Uuid
+  cobro      Cobro         @relation(fields: [cobroId], references: [id])
+  resultado  ResultadoPago
+  mensaje    String        @db.VarChar(100)
+  ultimos4   String        @db.Char(4)
+  referencia String        @unique @db.VarChar(22)
+  creadoEn   DateTime      @default(now()) @map("creado_en")
+
+  comprobante Comprobante?
+
+  @@index([cobroId])
+  @@map("intento_pago")
+}
+
+/// Comprobante de un cobro pagado (H12). Uno por cobro.
+///
+/// `numero` (CMP-000001) se toma de la secuencia `comprobante_numero_seq`. El
+/// formato y que total = subtotal + iva viven como CHECK en la migración.
+model Comprobante {
+  id         String      @id @default(uuid()) @db.Uuid
+  numero     String      @unique @db.VarChar(10)
+  cobroId    String      @unique @map("cobro_id") @db.Uuid
+  cobro      Cobro       @relation(fields: [cobroId], references: [id])
+  intentoId  String      @unique @map("intento_id") @db.Uuid
+  intento    IntentoPago @relation(fields: [intentoId], references: [id])
+  subtotal   Decimal     @db.Decimal(10, 2)
+  iva        Decimal     @db.Decimal(10, 2)
+  total      Decimal     @db.Decimal(10, 2)
+  emitidoEn  DateTime    @default(now()) @map("emitido_en")
+
+  @@map("comprobante")
 }

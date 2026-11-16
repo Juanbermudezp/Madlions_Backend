@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { MembresiaRepository } from '@Membresias/repositories';
+import type { CobrosService } from '@Cobros/services';
 import type { EstadoMembresiaService } from './estado-membresia.service.js';
 import { EstadoMembresia, Prisma, TipoOperacionMembresia, TipoPlan, type Membresia } from '@PrismaClient';
 import {
@@ -37,7 +38,7 @@ const PAGO = new Date('2026-11-15T10:00:00-06:00');
 
 describe('MembresiasService.aplicarPago', () => {
     const repo = { findById: vi.fn(), marcarPagada: vi.fn() };
-    const service = new MembresiasService(repo as unknown as MembresiaRepository, {} as EstadoMembresiaService);
+    const service = new MembresiasService(repo as unknown as MembresiaRepository, {} as EstadoMembresiaService, {} as CobrosService);
 
     beforeEach(() => vi.resetAllMocks());
 
@@ -50,7 +51,7 @@ describe('MembresiasService.aplicarPago', () => {
         expect(repo.marcarPagada).toHaveBeenCalledWith('mem1', 'PAGO-1', {
             fechaInicio: '2026-11-20',
             fechaVencimiento: '2026-12-19',
-        });
+        }, undefined);
         expect(resultado).toEqual({ aplicado: true, membresia: pagada('PAGO-1') });
     });
 
@@ -99,7 +100,7 @@ describe('MembresiasService.aplicarPago', () => {
 describe('MembresiasService.obtenerEstado', () => {
     it('delega en EstadoMembresiaService con la fecha indicada', async () => {
         const estados = { obtenerEstado: vi.fn().mockResolvedValue({ estado: 'VIGENTE' }) };
-        const service = new MembresiasService({} as MembresiaRepository, estados as unknown as EstadoMembresiaService);
+        const service = new MembresiasService({} as MembresiaRepository, estados as unknown as EstadoMembresiaService, {} as CobrosService);
         await expect(service.obtenerEstado('m1', '2026-11-15')).resolves.toEqual({ estado: 'VIGENTE' });
         expect(estados.obtenerEstado).toHaveBeenCalledWith('m1', '2026-11-15');
     });
@@ -111,6 +112,7 @@ describe('MembresiasService · membresía del usuario autenticado (H3)', () => {
     const service = new MembresiasService(
         repo as unknown as MembresiaRepository,
         estados as unknown as EstadoMembresiaService,
+        {} as CobrosService,
     );
 
     beforeEach(() => vi.resetAllMocks());
@@ -171,5 +173,26 @@ describe('MembresiasService · membresía del usuario autenticado (H3)', () => {
             repo.findConDueno.mockResolvedValue(null);
             await expect(service.obtenerMiMembresia('x', 'u1')).rejects.toThrow(new NotFoundException(MEMBRESIA_NO_EXISTE));
         });
+    });
+});
+
+describe('MembresiasService · confirmación del Módulo 5 (H12)', () => {
+    it('al iniciar registra que los cobros MEMBRESIA se confirman con aplicarPago, dentro de la transacción del pago', async () => {
+        const cobros = { registrarConfirmacion: vi.fn() };
+        const service = new MembresiasService(
+            {} as MembresiaRepository,
+            {} as EstadoMembresiaService,
+            cobros as unknown as CobrosService,
+        );
+        const aplicar = vi.spyOn(service, 'aplicarPago').mockResolvedValue({ aplicado: true } as never);
+
+        service.onModuleInit();
+        expect(cobros.registrarConfirmacion).toHaveBeenCalledWith('MEMBRESIA', expect.any(Function));
+
+        const confirmar = cobros.registrarConfirmacion.mock.calls[0][1];
+        const tx = { soy: 'tx' };
+        const fechaPago = new Date('2026-11-15T16:00:00Z');
+        await confirmar({ referenciaId: 'mem1', referenciaPago: 'PAY-20261115-ABC123', fechaPago }, tx);
+        expect(aplicar).toHaveBeenCalledWith('mem1', 'PAY-20261115-ABC123', fechaPago, tx);
     });
 });
