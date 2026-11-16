@@ -144,6 +144,7 @@ describe('RegistroMembresiaService', () => {
                 {
                     miembroId: 'm1',
                     concepto: ConceptoCobro.MEMBRESIA,
+                    detalle: 'Mensual ilimitado',
                     monto: new Prisma.Decimal('35.50'),
                     referenciaTipo: ReferenciaCobro.MEMBRESIA,
                     referenciaId: 'mem1',

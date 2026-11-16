@@ -11,6 +11,8 @@ import type {
 export interface DatosCobro {
     miembroId: string;
     concepto: ConceptoCobro;
+    /** Plan de la membresía, o fecha y entrenador de la sesión (máximo 150 caracteres). */
+    detalle: string;
     monto: number | Prisma.Decimal;
     referenciaTipo: ReferenciaCobro;
     referenciaId: string;

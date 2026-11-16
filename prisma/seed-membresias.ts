@@ -151,6 +151,7 @@ export async function cargarMembresiasDePrueba(
           miembroId: ids[caso],
           concepto:
             membresia.tipoOperacion === TipoOperacionMembresia.RENOVACION ? ConceptoCobro.RENOVACION : ConceptoCobro.MEMBRESIA,
+          detalle: p.nombre,
           monto: p.precio,
           referenciaTipo: 'MEMBRESIA',
           referenciaId: membresia.id,

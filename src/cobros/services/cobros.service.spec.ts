@@ -9,6 +9,7 @@ describe('CobrosService.crearCobro', () => {
         const datos = {
             miembroId: 'm1',
             concepto: ConceptoCobro.MEMBRESIA,
+            detalle: 'Mensual ilimitado',
             monto: 35.5,
             referenciaTipo: ReferenciaCobro.MEMBRESIA,
             referenciaId: 'mem1',

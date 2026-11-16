@@ -103,6 +103,7 @@ export class RegistroMembresiaService {
                                 operacion.tipoOperacion === TipoOperacionMembresia.RENOVACION
                                     ? ConceptoCobro.RENOVACION
                                     : ConceptoCobro.MEMBRESIA,
+                            detalle: plan.nombre,
                             monto: plan.precio,
                             referenciaTipo: ReferenciaCobro.MEMBRESIA,
                             referenciaId: membresiaId,
