@@ -1,15 +1,5 @@
-/**
- * QA-17.1 · Pruebas de la consulta del estado de las máquinas (H17)
- *
- * Prueba la API de punta a punta contra la base real del docker-compose, con
- * los usuarios del seed. Cada bloque `describe` es un criterio de aceptación
- * de H17. Las máquinas que crea llevan códigos MAQ-8xx y se borran al
- * terminar; el inventario del seed (MAQ-001 a MAQ-012) no se modifica.
- *
- * Requisitos: migraciones aplicadas y `npm run db:seed`.
- * Ejecutar: npm run test:e2e
- * Detalle de los casos: docs/qa/H17-pruebas-estado-maquinas.md
- */
+// QA-17.1 · Pruebas de la consulta del estado de las máquinas (H17)
+
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -26,14 +16,16 @@ const CORREOS = {
 } as const;
 type RolPrueba = keyof typeof CORREOS;
 const TODOS_LOS_ROLES = Object.keys(CORREOS) as RolPrueba[];
-/** Roles que no ven el motivo ni el usuario del último cambio (criterio 5). */
 const SIN_DATOS_INTERNOS: RolPrueba[] = ['MIEMBRO', 'RECEPCION'];
-/** Roles que sí los ven, porque son los que pueden cambiar el estado (S13). */
 const CON_DATOS_INTERNOS: RolPrueba[] = ['ADMINISTRADOR', 'ENTRENADOR'];
 const PASSWORD = 'Demo1234!';
 
-/** Combinación de tipo y zona que el inventario del seed deja vacía. */
 const COMBINACION_VACIA = { tipo: TipoMaquina.PESO_LIBRE, zona: ZonaMaquina.PISO_1 };
+// QA-10: ninguna máquina del inventario la cumple, ni las tres que crea la prueba.
+const COMBINACION_SIN_RESULTADOS = {
+  estado: EstadoMaquina.FUERA_DE_SERVICIO,
+  tipo: TipoMaquina.CARDIO,
+};
 
 const MOTIVO_MANTENIMIENTO = 'Banda desgastada, se espera el repuesto.';
 const MOTIVO_FUERA_DE_SERVICIO = 'Tablero quemado, no tiene reparación.';
@@ -60,7 +52,6 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
   let prisma: PrismaService;
   const token = {} as Record<RolPrueba, string>;
   let adminId: string;
-  /** Fecha estimada de retorno de MAQ-801, en formato AAAA-MM-DD. */
   let fechaRetorno: string;
 
   const http = () => request(app.getHttpServer());
@@ -75,7 +66,6 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
   beforeAll(async () => {
     const ref = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = ref.createNestApplication();
-    // Igual que main.ts.
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
@@ -107,8 +97,6 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
       );
     }
 
-    // Máquinas de esta corrida: una en mantenimiento con fecha estimada, una
-    // fuera de servicio sin fecha y una operativa.
     await prisma.maquina.deleteMany({ where: { codigo: { startsWith: PREFIJO_PRUEBA } } });
 
     const enTresDias = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
@@ -145,6 +133,13 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
         zona: ZonaMaquina.AREA_FUNCIONAL,
       },
     });
+
+    if (await prisma.maquina.count({ where: COMBINACION_SIN_RESULTADOS })) {
+      throw new Error(
+        `Ya hay una máquina ${COMBINACION_SIN_RESULTADOS.tipo} ${COMBINACION_SIN_RESULTADOS.estado}: ` +
+          'QA-10 necesita una combinación sin resultados',
+      );
+    }
   });
 
   afterAll(async () => {
@@ -190,7 +185,6 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
       for (const estado of Object.values(EstadoMaquina)) {
         expect(cuerpo.resumen[estado]).toBe(await prisma.maquina.count({ where: { estado } }));
       }
-      // Las tres máquinas de la corrida están representadas.
       expect(cuerpo.resumen.EN_MANTENIMIENTO).toBeGreaterThanOrEqual(1);
       expect(cuerpo.resumen.FUERA_DE_SERVICIO).toBeGreaterThanOrEqual(1);
     });
@@ -246,8 +240,7 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
     });
 
     it('QA-10 · un filtro que no cuadra con los otros deja la lista vacía', async () => {
-      // MAQ-802 está fuera de servicio, pero es FUERZA y no CARDIO.
-      const cuerpo = (await listar('MIEMBRO', { estado: 'FUERA_DE_SERVICIO', tipo: 'CARDIO' }))
+      const cuerpo = (await listar('MIEMBRO', COMBINACION_SIN_RESULTADOS))
         .body as MaquinasRespuesta;
 
       expect(cuerpo.maquinas).toHaveLength(0);
@@ -282,7 +275,6 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
     it('QA-14 · el filtro de estado no recorta el resumen; el de tipo y zona sí', async () => {
       const porEstado = (await listar('MIEMBRO', { estado: 'EN_MANTENIMIENTO' }))
         .body as MaquinasRespuesta;
-      // Filtrar por un estado no deja los otros dos contadores en 0.
       expect(porEstado.resumen.OPERATIVA).toBeGreaterThan(0);
       expect(porEstado.resumen).toEqual(
         ((await listar('MIEMBRO')).body as MaquinasRespuesta).resumen,
@@ -335,7 +327,6 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
 
       const cuerpo = res.body as MaquinasRespuesta;
       expect(cuerpo.maquinas).toEqual([]);
-      // El resumen sigue describiendo el inventario de esa zona, no la lista.
       expect(cuerpo.resumen).toBeDefined();
       expect(Object.keys(cuerpo.resumen).sort()).toEqual([
         'EN_MANTENIMIENTO',
@@ -354,7 +345,6 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
       expect(maquina).not.toHaveProperty('ultimoMotivo');
       expect(maquina).not.toHaveProperty('ultimoCambioPor');
       expect(maquina).not.toHaveProperty('ultimoCambioPorId');
-      // Ni el motivo ni el nombre del administrador salen en la respuesta.
       expect(res.text).not.toContain(MOTIVO_MANTENIMIENTO);
       expect(res.text).not.toContain(adminId);
     });
@@ -407,7 +397,6 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
         expect(res.status, `el rol ${rol} recibió ${res.status}`).toBe(404);
       }
 
-      // El estado de la máquina no cambió.
       const despues = await prisma.maquina.findUniqueOrThrow({ where: { codigo: 'MAQ-801' } });
       expect(despues.estado).toBe(EstadoMaquina.EN_MANTENIMIENTO);
     });

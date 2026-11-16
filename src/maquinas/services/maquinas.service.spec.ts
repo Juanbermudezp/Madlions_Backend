@@ -44,7 +44,6 @@ describe('MaquinasService', () => {
 
             expect(maquinas[0]).not.toHaveProperty('ultimoMotivo');
             expect(maquinas[0]).not.toHaveProperty('ultimoCambioPor');
-            // Tampoco llegan como undefined: la clave no existe en la respuesta.
             expect(JSON.stringify(maquinas[0])).not.toContain('ultimoMotivo');
             expect(JSON.stringify(maquinas[0])).not.toContain('Alberto');
         });
@@ -122,7 +121,6 @@ describe('MaquinasService', () => {
             });
 
             expect(maquinas).toEqual([]);
-            // El resumen sigue describiendo el inventario, no la lista vacía.
             expect(resumen).toEqual(RESUMEN);
         });
     });

@@ -11,11 +11,7 @@ import { MaquinasService } from '@Maquinas/services';
 import { ListarMaquinasQueryDto, MaquinasResponseDto } from '@Maquinas/dto';
 import { type User } from '@PrismaClient';
 
-/**
- * Estado de las máquinas del gimnasio (H17). Lo consulta cualquier usuario
- * con sesión; el administrador y el entrenador reciben además el motivo del
- * último cambio y quién lo hizo.
- */
+// Estado de las máquinas del gimnasio (H17).
 @ApiTags('maquinas')
 @ApiBearerAuth()
 @Controller('maquinas')

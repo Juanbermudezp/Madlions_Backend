@@ -2,15 +2,11 @@ import { ApiProperty } from '@nestjs/swagger';
 import { EstadoMaquina, TipoMaquina, ZonaMaquina } from '@PrismaClient';
 import type { MaquinaConUltimoCambio } from '../repositories/maquina.repository.js';
 
-/** Fecha de una columna DATE como AAAA-MM-DD. */
 function fechaISO(fecha: Date | null): string | null {
     return fecha ? fecha.toISOString().slice(0, 10) : null;
 }
 
-/**
- * Campos que ve cualquier rol. Se arma como objeto plano (sin anotar la clase)
- * para que MaquinaInternaResponseDto pueda esparcirlo sin arrastrar prototipos.
- */
+// Campos que ve cualquier rol.
 function camposPublicos(maquina: MaquinaConUltimoCambio) {
     return {
         id: maquina.id,
@@ -23,7 +19,6 @@ function camposPublicos(maquina: MaquinaConUltimoCambio) {
     };
 }
 
-/** Quién hizo el último cambio de estado. Dato interno (H17, criterio 5). */
 export class UsuarioCambioMaquinaDto {
     @ApiProperty({ format: 'uuid' })
     id!: string;
@@ -35,13 +30,8 @@ export class UsuarioCambioMaquinaDto {
     apellido!: string;
 }
 
-/**
- * Máquina tal como la ve cualquier rol (H17).
- *
- * No lleva `ultimoMotivo` ni `ultimoCambioPor`: el miembro no debe ver el
- * motivo interno ni quién hizo el último cambio. Los campos no se omiten en el
- * frontend, se construye otro objeto acá (criterio técnico de BE-17.1).
- */
+// Máquina tal como la ve cualquier rol (H17).
+
 export class MaquinaResponseDto {
     @ApiProperty({ format: 'uuid' })
     id!: string;
@@ -75,11 +65,8 @@ export class MaquinaResponseDto {
     }
 }
 
-/**
- * Máquina con los datos internos del último cambio de estado. Solo la reciben
- * el administrador y el entrenador, que son quienes pueden cambiarlo (H18,
- * supuesto S13).
- */
+// Máquina con los datos internos del último cambio de estado. 
+
 export class MaquinaInternaResponseDto extends MaquinaResponseDto {
     @ApiProperty({
         type: String,

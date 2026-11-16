@@ -8,26 +8,26 @@ import {
     type ZonaMaquina,
 } from '@PrismaClient';
 
-/** Filtros de GET /maquinas. Los que llegan se combinan con AND. */
+// Filtros de GET /maquinas. Los que llegan se combinan con AND
 export interface FiltrosMaquina {
     estado?: EstadoMaquina;
     tipo?: TipoMaquina;
     zona?: ZonaMaquina;
 }
 
-/** Filtros del resumen: el estado no cuenta, porque el resumen lo desglosa. */
+// Filtros del resumen: el estado no cuenta, porque el resumen lo desglosa.
 export type FiltrosInventario = Omit<FiltrosMaquina, 'estado'>;
 
 const INCLUIR_ULTIMO_CAMBIO = {
     ultimoCambioPor: { select: { id: true, nombre: true, apellido: true } },
 } as const;
 
-/** Máquina con el nombre del usuario que hizo el último cambio de estado. */
+// Máquina con el nombre del usuario que hizo el último cambio de estado.
 export type MaquinaConUltimoCambio = Maquina & {
     ultimoCambioPor: { id: string; nombre: string; apellido: string } | null;
 };
 
-/** Resumen vacío: los tres estados en 0, para que el conteo nunca omita uno. */
+// Resumen vacío: los tres estados en 0, para que el conteo nunca omita uno.
 function resumenEnCero(): Record<EstadoMaquina, number> {
     return {
         [EstadoMaquina.OPERATIVA]: 0,

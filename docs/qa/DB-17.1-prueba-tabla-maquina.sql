@@ -3,20 +3,13 @@
 -- Verifica a nivel de base de datos las reglas que la tabla debe garantizar.
 -- Todo corre dentro de una transacción que termina en ROLLBACK: no deja datos.
 -- Requiere las migraciones aplicadas y el seed (npm run db:seed).
---
--- Ejecutar desde la raíz del backend:
---   docker compose exec -T postgres psql -U postgres -d si_be_boilerplate \
---     -v ON_ERROR_STOP=1 < docs/qa/DB-17.1-prueba-tabla-maquina.sql
---
--- Resultado esperado: una línea "✔" por caso y al final "ROLLBACK".
--- Si un caso falla, psql se detiene con "✘ <caso>: <motivo>".
 
 \set ON_ERROR_STOP 1
 SET client_min_messages = notice;
 
 BEGIN;
 
--- Ayudantes (viven solo en esta sesión) ------------------------------------
+-- Ayudantes que viven solo en esta sesión ------------------------------------
 
 -- Id del usuario del seed a partir de su correo.
 CREATE FUNCTION pg_temp.usuario(correo text) RETURNS uuid AS $$
@@ -29,7 +22,7 @@ BEGIN
   RETURN resultado;
 END $$ LANGUAGE plpgsql;
 
--- Ejecuta una sentencia que debe fallar con un código SQLSTATE concreto.
+
 CREATE FUNCTION pg_temp.debe_fallar(caso text, sentencia text, codigo text)
 RETURNS void AS $$
 DECLARE fallo boolean := false;
@@ -49,8 +42,7 @@ BEGIN
   RAISE NOTICE '✔ %', caso;
 END $$ LANGUAGE plpgsql;
 
--- Inserta una máquina con valores válidos y devuelve su id. Los códigos de
--- prueba arrancan en MAQ-9xx para no chocar con el inventario del seed.
+
 CREATE FUNCTION pg_temp.maquina(
   codigo text DEFAULT 'MAQ-901',
   nombre text DEFAULT 'Caminadora de prueba',
@@ -62,9 +54,9 @@ CREATE FUNCTION pg_temp.maquina(
   RETURNING id;
 $$ LANGUAGE sql;
 
--- Casos ---------------------------------------------------------------------
+-- Casos
 
--- C1. Una máquina nueva nace OPERATIVA, sin retorno pendiente y sin datos del
+-- C1. Una máquina nueva nace operativa, sin retorno pendiente y sin datos del
 -- último cambio (nunca cambió de estado).
 DO $$
 DECLARE id_maquina uuid := pg_temp.maquina(); m maquina;

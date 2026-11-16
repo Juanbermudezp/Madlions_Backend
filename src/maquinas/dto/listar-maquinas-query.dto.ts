@@ -10,15 +10,9 @@ export const TIPO_MAQUINA_INVALIDO =
 export const ZONA_MAQUINA_INVALIDA =
     'La zona debe ser PISO_1, PISO_2 o AREA_FUNCIONAL.';
 
-/**
- * El filtro vacío (`?estado=`) significa "todos", no un valor inválido: la
- * pantalla refleja los filtros en la URL (FE-17.1) y manda el parámetro vacío
- * cuando el usuario elige "Todos". Un valor que no existe en el enum sí da 400.
- */
 const vacioEsSinFiltro = ({ value }: { value: unknown }) =>
     value === '' ? undefined : value;
 
-/** Query de GET /maquinas (H17). Los tres filtros se combinan con AND. */
 export class ListarMaquinasQueryDto {
     @ApiPropertyOptional({ enum: EstadoMaquina, example: EstadoMaquina.EN_MANTENIMIENTO })
     @Transform(vacioEsSinFiltro)

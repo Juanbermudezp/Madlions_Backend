@@ -8,7 +8,7 @@ import {
 } from './maquina-response.dto.js';
 import type { MaquinaConUltimoCambio } from '../repositories/maquina.repository.js';
 
-// Las mismas opciones del ValidationPipe global de main.ts.
+
 const opciones = { whitelist: true, forbidNonWhitelisted: true };
 
 async function erroresQuery(datos: Record<string, unknown>) {
