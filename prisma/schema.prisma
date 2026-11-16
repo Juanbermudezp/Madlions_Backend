@@ -94,6 +94,7 @@ model User {
   miembro       Miembro?
   bloquesDisponibilidad BloqueDisponibilidad[]
   clases                Clase[]
+  membresiasRegistradas Membresia[]
   sesionesPersonales    SesionPersonal[]
   @@map("usuario")
 }
@@ -112,7 +113,9 @@ model Miembro {
   createdAt     DateTime @default(now()) @map("created_at")
   registrosProgreso RegistroProgreso[] 
 
-  avisos Aviso[]
+    avisos Aviso[]
+  membresias Membresia[]
+  cobros Cobro[]
   sesionesPersonales SesionPersonal[]
 
   @@map("miembro")
@@ -164,6 +167,7 @@ model TipoClase {
 
   clases Clase[]
   planes PlanTipoClase[]
+  membresias MembresiaTipoClase[]
 
   @@map("tipo_clase")
 }
@@ -275,6 +279,7 @@ model Plan {
   actualizadoEn  DateTime @updatedAt @map("actualizado_en")
 
   tiposClase PlanTipoClase[]
+  membresias Membresia[]
 
   @@map("plan")
 }
@@ -333,4 +338,176 @@ model SesionPersonal {
   @@index([miembroId, inicio])
   @@index([entrenadorId, inicio])
   @@map("sesion_personal")
+}
+/// Operación con la que se registró una membresía (H2).
+enum TipoOperacionMembresia {
+  COMPRA
+  RENOVACION
+
+  @@map("tipo_operacion_membresia")
+}
+
+/// Estado de pago de una membresía (H2). Las fechas de vigencia se fijan al
+/// pasar a PAGADA.
+enum EstadoMembresia {
+  PENDIENTE_PAGO
+  PAGADA
+
+  @@map("estado_membresia")
+}
+
+/// Membresía comprada o renovada por un miembro (H2).
+///
+/// Guarda una copia de las condiciones del plan al momento de la compra
+/// (nombre, tipo, precio, cantidad de clases y tipos de clase), así editar o
+/// desactivar el plan (H1) no la altera.
+///
+/// Viven como CHECK o índice en la migración: precio mayor que 0,
+/// cantidad_clases según el tipo de plan, fechas de vigencia nulas hasta el
+/// pago, una renovación siempre apunta a la membresía anterior, y el índice
+/// único parcial que permite una sola membresía PENDIENTE_PAGO por miembro.
+model Membresia {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  miembroId             String                 @map("miembro_id") @db.Uuid
+  miembro               Miembro                @relation(fields: [miembroId], references: [id])
+  planId                String                 @map("plan_id") @db.Uuid
+  plan                  Plan                   @relation(fields: [planId], references: [id])
+  nombrePlan            String                 @map("nombre_plan") @db.VarChar(60)
+  tipoPlan              TipoPlan               @map("tipo_plan")
+  precio                Decimal                @db.Decimal(10, 2)
+  cantidadClases        Int?                   @map("cantidad_clases")
+  tipoOperacion         TipoOperacionMembresia @map("tipo_operacion")
+  membresiaAnteriorId   String?                @map("membresia_anterior_id") @db.Uuid
+  membresiaAnterior     Membresia?             @relation("RenovacionMembresia", fields: [membresiaAnteriorId], references: [id], onDelete: Restrict)
+  renovaciones          Membresia[]            @relation("RenovacionMembresia")
+  estado                EstadoMembresia        @default(PENDIENTE_PAGO)
+  fechaInicioSolicitada DateTime               @map("fecha_inicio_solicitada") @db.Date
+  fechaInicio           DateTime?              @map("fecha_inicio") @db.Date
+  fechaVencimiento      DateTime?              @map("fecha_vencimiento") @db.Date
+  registradaPorId       String                 @map("registrada_por") @db.Uuid
+  registradaPor         User                   @relation(fields: [registradaPorId], references: [id])
+  pagoAplicadoRef       String?                @unique @map("pago_aplicado_ref") @db.VarChar(100)
+  creadoEn              DateTime               @default(now()) @map("creado_en")
+
+  tiposClase MembresiaTipoClase[]
+
+  @@index([miembroId, estado])
+  @@map("membresia")
+}
+
+/// Tipos de clase incluidos en la membresía, copiados del plan al comprarla (H2).
+model MembresiaTipoClase {
+  membresiaId String    @map("membresia_id") @db.Uuid
+  membresia   Membresia @relation(fields: [membresiaId], references: [id], onDelete: Cascade)
+  tipoClaseId String    @map("tipo_clase_id") @db.Uuid
+  tipoClase   TipoClase @relation(fields: [tipoClaseId], references: [id])
+
+  @@id([membresiaId, tipoClaseId])
+  @@map("membresia_tipo_clase")
+}
+
+/// Concepto de un cobro (Módulo 5): compra de membresía y renovación (H2) o
+/// sesión adicional con un entrenador (H9).
+enum ConceptoCobro {
+  MEMBRESIA
+  RENOVACION
+  SESION_ADICIONAL
+
+  @@map("concepto_cobro")
+}
+
+/// Tipo del registro que origina un cobro (Módulo 5).
+enum ReferenciaCobro {
+  MEMBRESIA
+  SESION
+
+  @@map("referencia_cobro")
+}
+
+/// Estado de un cobro (Módulo 5). Se crea PENDIENTE y pasa a PAGADO cuando
+/// la pasarela aprueba un intento de pago (H12).
+enum EstadoCobro {
+  PENDIENTE
+  PAGADO
+
+  @@map("estado_cobro")
+}
+
+/// Cobro que el miembro paga desde su cuenta (Módulo 5). Lo crea
+/// CobrosService.crearCobro() desde el módulo que origina el cobro (H2 al
+/// registrar una membresía).
+///
+/// El monto mayor que 0 vive como CHECK en la migración. Cada registro de
+/// origen tiene un solo cobro (índice único referencia_tipo + referencia_id).
+model Cobro {
+  id             String          @id @default(uuid()) @db.Uuid
+  miembroId      String          @map("miembro_id") @db.Uuid
+  miembro        Miembro         @relation(fields: [miembroId], references: [id])
+  concepto       ConceptoCobro
+  /// Plan de la membresía, o fecha y entrenador de la sesión (H12).
+  detalle        String          @db.VarChar(150)
+  monto          Decimal         @db.Decimal(10, 2)
+  referenciaTipo ReferenciaCobro @map("referencia_tipo")
+  referenciaId   String          @map("referencia_id") @db.Uuid
+  /// Desde cuándo se puede pagar (renovaciones, supuesto S3); null = desde que se genera.
+  habilitadoDesde DateTime?      @map("habilitado_desde") @db.Date
+  estado         EstadoCobro     @default(PENDIENTE)
+  pagadoEn       DateTime?       @map("pagado_en")
+  creadoEn       DateTime        @default(now()) @map("creado_en")
+
+  intentos    IntentoPago[]
+  comprobante Comprobante?
+
+  @@unique([referenciaTipo, referenciaId])
+  @@index([miembroId, estado])
+  @@map("cobro")
+}
+
+/// Resultado de un intento de pago en la pasarela simulada (H12).
+enum ResultadoPago {
+  APROBADO
+  RECHAZADO
+  ERROR
+
+  @@map("resultado_pago")
+}
+
+/// Intento de pago de un cobro en la pasarela simulada (H12).
+///
+/// Nunca guarda el número completo de la tarjeta ni el código de seguridad:
+/// solo los últimos 4 dígitos. El formato de `ultimos4` (4 dígitos) y de
+/// `referencia` (PAY-AAAAMMDD-XXXXXX) viven como CHECK en la migración.
+model IntentoPago {
+  id         String        @id @default(uuid()) @db.Uuid
+  cobroId    String        @map("cobro_id") @db.Uuid
+  cobro      Cobro         @relation(fields: [cobroId], references: [id])
+  resultado  ResultadoPago
+  mensaje    String        @db.VarChar(100)
+  ultimos4   String        @db.Char(4)
+  referencia String        @unique @db.VarChar(22)
+  creadoEn   DateTime      @default(now()) @map("creado_en")
+
+  comprobante Comprobante?
+
+  @@index([cobroId])
+  @@map("intento_pago")
+}
+
+/// Comprobante de un cobro pagado (H12). Uno por cobro.
+///
+/// `numero` (CMP-000001) se toma de la secuencia `comprobante_numero_seq`. El
+/// formato y que total = subtotal + iva viven como CHECK en la migración.
+model Comprobante {
+  id         String      @id @default(uuid()) @db.Uuid
+  numero     String      @unique @db.VarChar(10)
+  cobroId    String      @unique @map("cobro_id") @db.Uuid
+  cobro      Cobro       @relation(fields: [cobroId], references: [id])
+  intentoId  String      @unique @map("intento_id") @db.Uuid
+  intento    IntentoPago @relation(fields: [intentoId], references: [id])
+  subtotal   Decimal     @db.Decimal(10, 2)
+  iva        Decimal     @db.Decimal(10, 2)
+  total      Decimal     @db.Decimal(10, 2)
+  emitidoEn  DateTime    @default(now()) @map("emitido_en")
+
+  @@map("comprobante")
 }

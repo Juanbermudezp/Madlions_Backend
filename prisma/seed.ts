@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { EstadoClase, PrismaClient, Rol } from '../src/generated/prisma/client.js';
 import { aFechaLocal, hoyLocal, sumarDias } from '../src/common/fechas/fechas.js';
+import { cargarMembresiasDePrueba } from './seed-membresias.js';
 
 const PASSWORD = 'Demo1234!';
 
@@ -120,6 +121,8 @@ async function crearClases() {
 try {
   await crearUsuarios();
   await crearClases();
+  await cargarMembresiasDePrueba(prisma);
+  console.log('Miembros de prueba de H3 (uno por estado de membresía): estado.*@madlions.com / Demo1234!');
 } finally {
   await prisma.$disconnect();
 }
