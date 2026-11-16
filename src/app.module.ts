@@ -14,6 +14,7 @@ import { PlanesModule } from '@Planes';
 import { ConfiguracionModule } from '@Configuracion';
 import { MiembrosModule } from '@Miembros';
 import { MembresiasModule } from '@Membresias';
+import { CobrosModule } from '@Cobros';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { MembresiasModule } from '@Membresias';
     ConfiguracionModule,
     MiembrosModule,
     MembresiasModule,
+    CobrosModule,
   ],
   providers: [
     {

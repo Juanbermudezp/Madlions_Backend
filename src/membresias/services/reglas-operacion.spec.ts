@@ -19,7 +19,11 @@ const operacion = (datos: Partial<DatosOperacion>) => {
 describe('determinarOperacion · compra o renovación', () => {
     describe('COMPRA', () => {
         it('sin membresías pagadas del plan es COMPRA', () => {
-            expect(operacion({})).toMatchObject({ tipoOperacion: TipoOperacionMembresia.COMPRA, membresiaAnteriorId: null });
+            expect(operacion({})).toMatchObject({
+                tipoOperacion: TipoOperacionMembresia.COMPRA,
+                membresiaAnteriorId: null,
+                vencimientoAnterior: null,
+            });
         });
 
         it('todo Daypass es COMPRA, aunque haya otro Daypass pagado vigente o vencido', () => {
@@ -43,6 +47,7 @@ describe('determinarOperacion · compra o renovación', () => {
             expect(operacion({ tipoPlan, pagadasDelPlan: [vence('m1', '2026-11-01')], fechaSolicitada: '2026-11-20' })).toEqual({
                 tipoOperacion: TipoOperacionMembresia.RENOVACION,
                 membresiaAnteriorId: 'm1',
+                vencimientoAnterior: '2026-11-01',
                 fechaInicio: '2026-11-20',
                 fechaVencimiento: '2026-12-19',
                 fechaInicioFija: false,
@@ -53,6 +58,7 @@ describe('determinarOperacion · compra o renovación', () => {
             expect(operacion({ pagadasDelPlan: [vence('m1', '2026-11-30')], fechaSolicitada: '2026-11-16' })).toEqual({
                 tipoOperacion: TipoOperacionMembresia.RENOVACION,
                 membresiaAnteriorId: 'm1',
+                vencimientoAnterior: '2026-11-30',
                 fechaInicio: '2026-12-01',
                 fechaVencimiento: '2026-12-30',
                 fechaInicioFija: true,

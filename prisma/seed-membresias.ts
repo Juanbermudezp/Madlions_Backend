@@ -124,6 +124,8 @@ export async function cargarMembresiasDePrueba(
       pagada: boolean;
       operacion?: TipoOperacionMembresia;
       anteriorId?: string;
+      /** AAAA-MM-DD: vencimiento de la membresía que se renueva. */
+      vencimientoAnterior?: string;
     },
   ) => {
     const inicio = sumarDias(hoy, opciones.inicio);
@@ -155,6 +157,7 @@ export async function cargarMembresiasDePrueba(
           monto: p.precio,
           referenciaTipo: 'MEMBRESIA',
           referenciaId: membresia.id,
+          habilitadoDesde: opciones.vencimientoAnterior ? fecha(opciones.vencimientoAnterior) : null,
         },
       });
     }
@@ -178,6 +181,7 @@ export async function cargarMembresiasDePrueba(
     pagada: false,
     operacion: TipoOperacionMembresia.RENOVACION,
     anteriorId: actual.id,
+    vencimientoAnterior: actual.fechaVencimiento!.toISOString().slice(0, 10),
   });
   // Próxima a vencer (vence en 1 día) con la renovación ya pagada.
   const porVencer = await crear('renovacionPagada', mensual, { inicio: -28, pagada: true });

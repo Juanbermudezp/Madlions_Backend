@@ -107,6 +107,10 @@ export class RegistroMembresiaService {
                             monto: plan.precio,
                             referenciaTipo: ReferenciaCobro.MEMBRESIA,
                             referenciaId: membresiaId,
+                            // Una renovación se paga desde el vencimiento de la membresía actual (S3).
+                            habilitadoDesde: operacion.vencimientoAnterior
+                                ? new Date(`${operacion.vencimientoAnterior}T00:00:00Z`)
+                                : null,
                         },
                         tx,
                     ),
