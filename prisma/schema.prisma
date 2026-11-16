@@ -331,6 +331,7 @@ model SesionPersonal {
   fin          DateTime
   precio       Decimal              @db.Decimal(10, 2)
   cobroId      String?              @unique @map("cobro_id") @db.Uuid
+  cobro        Cobro?               @relation(fields: [cobroId], references: [id], onDelete: Restrict)
   estado       EstadoSesion         @default(AGENDADA)
   asistencia   AsistenciaSesion     @default(SIN_REGISTRAR)
   creadaEn     DateTime             @default(now()) @map("creada_en")
@@ -457,6 +458,7 @@ model Cobro {
 
   intentos    IntentoPago[]
   comprobante Comprobante?
+  sesion      SesionPersonal?
 
   @@unique([referenciaTipo, referenciaId])
   @@index([miembroId, estado])
