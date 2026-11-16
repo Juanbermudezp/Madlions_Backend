@@ -34,6 +34,25 @@ export class BloqueRepository {
         });
     }
 
+    /**
+ * Bloques DISPONIBLES del entrenador que empiezan entre `desde` y `hasta`,
+ * ambos incluidos (H9). Es la vista del miembro: nunca incluye OCUPADOS.
+ */
+    findDisponiblesDelEntrenadorEntre(
+        entrenadorId: string,
+        desde: Date,
+        hasta: Date,
+    ): Promise<BloqueDisponibilidad[]> {
+        return this.prisma.bloqueDisponibilidad.findMany({
+            where: {
+                entrenadorId,
+                estado: EstadoBloque.DISPONIBLE,
+                inicio: { gte: desde, lte: hasta },
+            },
+            orderBy: { inicio: 'asc' },
+        });
+    }
+
     crearSinTraslape(data: CrearBloqueData): Promise<BloqueDisponibilidad> {
         return this.prisma.$transaction(async (tx) => {
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${data.entrenadorId}::text))`;
