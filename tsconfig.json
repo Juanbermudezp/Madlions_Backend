@@ -58,6 +58,8 @@
       "@Planes/*": ["./src/planes/*/index.ts"],
       "@Configuracion": ["./src/configuracion/index.ts"],
       "@Configuracion/*": ["./src/configuracion/*/index.ts"],
+      "@Entrenadores": ["./src/entrenadores/index.ts"],
+      "@Entrenadores/*": ["./src/entrenadores/*/index.ts"],
     }
   }
 }
