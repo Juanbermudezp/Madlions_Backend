@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { CobrosController } from '@Cobros/controllers';
 import { CobroRepository } from '@Cobros/repositories';
-import { CobrosService } from '@Cobros/services';
+import { CobrosService, PagosService, PasarelaSimuladaService } from '@Cobros/services';
 
 /**
  * Cobros (Módulo 5). CobrosService.crearCobro() genera el cobro PENDIENTE que
@@ -10,7 +10,7 @@ import { CobrosService } from '@Cobros/services';
  */
 @Module({
     controllers: [CobrosController],
-    providers: [CobrosService, CobroRepository],
+    providers: [CobrosService, CobroRepository, PagosService, PasarelaSimuladaService],
     exports: [CobrosService],
 })
 export class CobrosModule {}

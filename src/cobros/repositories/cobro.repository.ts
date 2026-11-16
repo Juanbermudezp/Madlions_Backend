@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
-import type {
-    Cobro,
-    ConceptoCobro,
+import {
     EstadoCobro,
-    Prisma,
-    ReferenciaCobro,
+    ResultadoPago,
+    type Cobro,
+    type ConceptoCobro,
+    type Prisma,
+    type ReferenciaCobro,
 } from '@PrismaClient';
 
 /** Datos de un cobro nuevo. */
@@ -19,6 +20,25 @@ export interface DatosCobro {
     referenciaId: string;
     /** Desde cuándo se puede pagar (renovaciones); null = desde que se genera. */
     habilitadoDesde?: Date | null;
+}
+
+/** Cobro con el usuario dueño (para comprobar la pertenencia). */
+export type CobroConDueno = Cobro & { miembro: { usuarioId: string } };
+
+/** Intento de pago a registrar. Solo los últimos 4 dígitos de la tarjeta. */
+export interface DatosIntento {
+    cobroId: string;
+    resultado: ResultadoPago;
+    mensaje: string;
+    ultimos4: string;
+    referencia: string;
+}
+
+/** Montos del comprobante (IVA incluido en el total). */
+export interface MontosComprobante {
+    subtotal: number;
+    iva: number;
+    total: number;
 }
 
 /** Cobro con el número de su comprobante, si ya se pagó. */
@@ -36,6 +56,54 @@ export class CobroRepository {
      */
     create(data: DatosCobro, tx?: Prisma.TransactionClient): Promise<Cobro> {
         return (tx ?? this.prisma).cobro.create({ data });
+    }
+
+    findConDueno(id: string): Promise<CobroConDueno | null> {
+        return this.prisma.cobro.findUnique({
+            where: { id },
+            include: { miembro: { select: { usuarioId: true } } },
+        });
+    }
+
+    /** Intento rechazado o con error: queda registrado y el cobro sigue PENDIENTE. */
+    registrarIntento(datos: DatosIntento): Promise<{ id: string }> {
+        return this.prisma.intentoPago.create({ data: datos, select: { id: true } });
+    }
+
+    /**
+     * Pago aprobado, en una sola transacción:
+     * 1. pasa el cobro de PENDIENTE a PAGADO solo si sigue PENDIENTE
+     *    (operación condicionada: de varios intentos a la vez, gana uno);
+     * 2. registra el intento APROBADO;
+     * 3. emite el comprobante con el siguiente número CMP-000001;
+     * 4. ejecuta `confirmar` (p. ej. activar la membresía) con la misma
+     *    transacción: si falla, no queda nada.
+     *
+     * @returns el número del comprobante, o null si el cobro ya no estaba PENDIENTE.
+     */
+    confirmarPago(
+        intento: DatosIntento,
+        montos: MontosComprobante,
+        pagadoEn: Date,
+        confirmar: (tx: Prisma.TransactionClient) => Promise<void>,
+    ): Promise<string | null> {
+        return this.prisma.$transaction(async (tx) => {
+            const { count } = await tx.cobro.updateMany({
+                where: { id: intento.cobroId, estado: EstadoCobro.PENDIENTE },
+                data: { estado: EstadoCobro.PAGADO, pagadoEn },
+            });
+            if (count === 0) return null;
+
+            const { id: intentoId } = await tx.intentoPago.create({ data: intento, select: { id: true } });
+            const [{ numero }] = await tx.$queryRaw<{ numero: string }[]>`
+                SELECT 'CMP-' || lpad(nextval('comprobante_numero_seq')::text, 6, '0') AS numero
+            `;
+            await tx.comprobante.create({
+                data: { numero, cobroId: intento.cobroId, intentoId, ...montos, emitidoEn: pagadoEn },
+            });
+            await confirmar(tx);
+            return numero;
+        });
     }
 
     /**

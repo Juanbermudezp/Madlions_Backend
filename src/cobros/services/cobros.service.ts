@@ -2,7 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { hoyLocal } from '@Common/fechas';
 import { CobroRepository, type DatosCobro } from '@Cobros/repositories';
 import type { CobroResponseDto } from '@Cobros/dto';
-import { ConceptoCobro, type Cobro, type EstadoCobro, type Prisma } from '@PrismaClient';
+import {
+    ConceptoCobro,
+    type Cobro,
+    type EstadoCobro,
+    type Prisma,
+    type ReferenciaCobro,
+} from '@PrismaClient';
 import { aDia, estaHabilitado } from './reglas-cobro.js';
 
 export const DETALLE_COBRO_INVALIDO = 'El detalle del cobro es obligatorio y puede tener hasta 150 caracteres.';
@@ -21,10 +27,40 @@ export class CobroInvalidoError extends Error {
     }
 }
 
+/** Datos del pago aprobado que recibe el módulo dueño del cobro. */
+export interface PagoConfirmado {
+    referenciaId: string;
+    /** Referencia del intento aprobado (PAY-AAAAMMDD-XXXXXX). */
+    referenciaPago: string;
+    fechaPago: Date;
+}
+
+/**
+ * Lo que hace el módulo dueño de un cobro cuando se paga (p. ej. Membresías
+ * activa la membresía). Recibe la transacción del pago.
+ */
+export type Confirmacion = (pago: PagoConfirmado, tx: Prisma.TransactionClient) => Promise<void>;
+
 /** Cobros (Módulo 5). */
 @Injectable()
 export class CobrosService {
+    private readonly confirmaciones = new Map<ReferenciaCobro, Confirmacion>();
+
     constructor(private readonly cobroRepository: CobroRepository) { }
+
+    /**
+     * Cada módulo registra qué hacer cuando se paga un cobro de su tipo
+     * (Membresías: MEMBRESIA → aplicarPago; Sesiones (H9): SESION). Así el
+     * Módulo 5 no depende de los módulos que le piden cobros.
+     */
+    registrarConfirmacion(tipo: ReferenciaCobro, confirmacion: Confirmacion): void {
+        this.confirmaciones.set(tipo, confirmacion);
+    }
+
+    /** Confirmación registrada para un tipo de cobro, si existe. */
+    confirmacionDe(tipo: ReferenciaCobro): Confirmacion | undefined {
+        return this.confirmaciones.get(tipo);
+    }
 
     /**
      * Genera un cobro PENDIENTE para los módulos 1 (membresías) y 3 (sesiones).

@@ -112,6 +112,11 @@ export async function cargarMembresiasDePrueba(
 
   // Se borran y recrean sus membresías y cobros, con fechas relativas a hoy.
   const miembroIds = Object.values(ids);
+  // Si alguno de estos miembros ya pagó (H12), primero van sus comprobantes e
+  // intentos: la base no deja borrar un cobro que tiene historial de pagos.
+  const deEstosMiembros = { cobro: { miembroId: { in: miembroIds } } };
+  await prisma.comprobante.deleteMany({ where: deEstosMiembros });
+  await prisma.intentoPago.deleteMany({ where: deEstosMiembros });
   await prisma.cobro.deleteMany({ where: { miembroId: { in: miembroIds } } });
   await prisma.membresia.deleteMany({ where: { miembroId: { in: miembroIds }, membresiaAnteriorId: { not: null } } });
   await prisma.membresia.deleteMany({ where: { miembroId: { in: miembroIds } } });
