@@ -73,20 +73,35 @@ describe('referencia del intento', () => {
     });
 });
 
-describe('desglosarIva (IVA 13 % incluido en el monto)', () => {
+describe('desglosarIva · IVA 13 % incluido, redondeo half-up a dos decimales', () => {
     it.each([
-        [35.5, 31.42, 4.08],
-        [50, 44.25, 5.75],
-        [5, 4.42, 0.58],
-        [0.01, 0.01, 0],
-    ])('%s → subtotal %s + IVA %s', (total, subtotal, iva) => {
+        // total   subtotal = total / 1.13   IVA = total − subtotal
+        [35.5, 31.42, 4.08], //   31.4159… → 31.42
+        [50, 44.25, 5.75], //     44.2477… → 44.25
+        [12.5, 11.06, 1.44], //   11.0619… → 11.06
+    ])('prueba del cálculo con tres montos: %s → subtotal %s + IVA %s', (total, subtotal, iva) => {
         expect(desglosarIva(total)).toEqual({ subtotal, iva, total });
     });
 
-    it('subtotal + IVA siempre suma el total exacto', () => {
-        for (let centavos = 1; centavos <= 20000; centavos += 37) {
-            const { subtotal, iva, total } = desglosarIva(centavos / 100);
-            expect(Math.round((subtotal + iva) * 100)).toBe(Math.round(total * 100));
+    it('acepta el monto como texto con dos decimales (Decimal de Prisma)', () => {
+        expect(desglosarIva('35.50')).toEqual({ subtotal: 31.42, iva: 4.08, total: 35.5 });
+        expect(desglosarIva('0.01')).toEqual({ subtotal: 0.01, iva: 0, total: 0.01 });
+    });
+
+    it('redondea half-up igual que un cálculo independiente con cociente y resto, de $0.01 a $10,000.00', () => {
+        const diferencias: string[] = [];
+        for (let centavos = 1; centavos <= 1_000_000; centavos += 7) {
+            // Referencia: subtotal = c × 100 / 113; si el resto es la mitad o más, se sube un centavo.
+            const cociente = Math.floor((centavos * 100) / 113);
+            const resto = centavos * 100 - cociente * 113;
+            const esperado = resto * 2 >= 113 ? cociente + 1 : cociente;
+
+            const { subtotal, iva, total } = desglosarIva((centavos / 100).toFixed(2));
+            const suma = Math.round((subtotal + iva) * 100);
+            if (Math.round(subtotal * 100) !== esperado || suma !== Math.round(total * 100)) {
+                diferencias.push(`${centavos / 100}: subtotal ${subtotal} (esperado ${esperado / 100}), suma ${suma / 100}`);
+            }
         }
+        expect(diferencias).toEqual([]);
     });
 });

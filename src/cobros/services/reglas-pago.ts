@@ -67,15 +67,27 @@ export function generarReferencia(hoy: string, aleatorio: (max: number) => numbe
     return `PAY-${hoy.replaceAll('-', '')}-${sufijo}`;
 }
 
-/** Tasa del IVA en El Salvador. */
+/** Tasa del IVA en El Salvador (13 %). */
 export const TASA_IVA = 0.13;
 
 /**
- * Desglose de un monto con IVA incluido: subtotal = total / 1.13 redondeado a
- * centavos e IVA = total − subtotal, así subtotal + IVA siempre suma el total.
+ * Desglose de un monto con IVA incluido (H12, BE-12.4):
+ * - subtotal = total / 1.13, redondeado half-up a dos decimales;
+ * - IVA = total − subtotal, así subtotal + IVA siempre suma el total.
+ *
+ * Se calcula con enteros (centavos) para no arrastrar errores de los
+ * decimales de JavaScript: subtotal en centavos = ⌊(centavos × 100 + 56,5) / 113⌋,
+ * que es dividir entre 1,13 y redondear la mitad hacia arriba.
  */
-export function desglosarIva(totalConIva: number): { subtotal: number; iva: number; total: number } {
-    const centavos = Math.round(totalConIva * 100);
-    const subtotal = Math.round(centavos / (1 + TASA_IVA));
+export function desglosarIva(totalConIva: number | string): { subtotal: number; iva: number; total: number } {
+    const centavos = aCentavos(totalConIva);
+    // round_half_up(c × 100 / 113) = ⌊(2 × c × 100 + 113) / 226⌋, todo con enteros.
+    const subtotal = Math.floor((2 * centavos * 100 + 113) / 226);
     return { subtotal: subtotal / 100, iva: (centavos - subtotal) / 100, total: centavos / 100 };
+}
+
+/** "35.5" o 35.5 → 3550 centavos (el monto ya viene con dos decimales como máximo). */
+function aCentavos(monto: number | string): number {
+    const [enteros, decimales = ''] = String(monto).split('.');
+    return Number(enteros) * 100 + Number(decimales.padEnd(2, '0').slice(0, 2));
 }

@@ -1,5 +1,5 @@
 /**
- * H12 · Pago de cobros con la pasarela simulada (BE-12.3).
+ * H12 · Pago de cobros con la pasarela simulada (BE-12.3) y comprobantes (BE-12.4).
  *
  * Contra la base real del docker-compose. Crea sus propios miembros (prefijo
  * qa12-) y recepción les registra compras por la API, así los cobros son los
@@ -32,6 +32,7 @@ describe('H12 · POST /cobros/:id/pagar', () => {
     const base = randomInt(100_000, 899_000);
     const miembros: { id: string; usuarioId: string; token: string }[] = [];
     let tokenRecepcion: string;
+    let tokenAdmin: string;
     let planId: string;
     const hoy = hoyLocal();
 
@@ -65,9 +66,10 @@ describe('H12 · POST /cobros/:id/pagar', () => {
             return (res.body as { accessToken: string }).accessToken;
         };
         tokenRecepcion = await login('recepcion@madlions.com');
+        tokenAdmin = await login('admin@madlions.com');
         const { passwordHash } = await prisma.user.findUniqueOrThrow({ where: { email: 'miembro@madlions.com' } });
 
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 12; i++) {
             const n = base + i;
             const usuario = await prisma.user.create({
                 data: {
@@ -76,7 +78,7 @@ describe('H12 · POST /cobros/:id/pagar', () => {
                 },
             });
             const miembro = await prisma.miembro.create({
-                data: { usuarioId: usuario.id, documento: `${String(n).padStart(8, '0')}-${i}`, codigoMiembro: `MBR-${String(n).padStart(6, '0')}` },
+                data: { usuarioId: usuario.id, documento: `${String(n).padStart(8, '0')}-${i % 10}`, codigoMiembro: `MBR-${String(n).padStart(6, '0')}` },
             });
             miembros.push({ id: miembro.id, usuarioId: usuario.id, token: await login(usuario.email) });
         }
@@ -217,5 +219,81 @@ describe('H12 · POST /cobros/:id/pagar', () => {
             );
             expect({ tabla, columna, total: Number(total) }).toEqual({ tabla, columna, total: 0 });
         }
+    });
+
+    describe('Comprobantes (BE-12.4)', () => {
+        const numeroDe = (n: string) => Number(n.slice(4));
+        const verComprobante = (numero: string, token?: string) => {
+            const req = http().get(`/api/v1/comprobantes/${numero}`);
+            return token ? req.set('Authorization', `Bearer ${token}`) : req;
+        };
+
+        it('el dueño ve su comprobante: número, fecha, miembro, concepto, detalle, subtotal, IVA, total, referencia y últimos 4', async () => {
+            const pagado = await prisma.cobro.findFirstOrThrow({
+                where: { miembroId: miembros[0].id, estado: 'PAGADO' },
+                include: { comprobante: true, intentos: true, miembro: { include: { usuario: true } } },
+            });
+            const res = await verComprobante(pagado.comprobante!.numero, miembros[0].token);
+            expect(res.status).toBe(200);
+            expect(res.body).toEqual({
+                numero: pagado.comprobante!.numero,
+                emitidoEn: pagado.comprobante!.emitidoEn.toISOString(),
+                miembro: { nombre: `Prueba QA12 ${corrida} 0`, codigo: pagado.miembro.codigoMiembro },
+                concepto: 'MEMBRESIA',
+                detalle: `[QA-H12] Mensual ${corrida}`,
+                subtotal: 31.42,
+                iva: 4.08,
+                total: 35.5,
+                referencia: pagado.intentos[0].referencia,
+                ultimos4: '4242',
+            });
+        });
+
+        it('el administrador ve cualquiera; otro miembro y recepción reciben 403; 404 si no existe; 401 sin sesión', async () => {
+            const { numero } = await prisma.comprobante.findFirstOrThrow({ where: { cobro: { miembroId: miembros[0].id } } });
+            expect((await verComprobante(numero, tokenAdmin)).status).toBe(200);
+            const ajeno = await verComprobante(numero, miembros[5].token);
+            expect(ajeno.status).toBe(403);
+            expect(JSON.stringify(ajeno.body)).not.toContain('4242');
+            expect((await verComprobante(numero, tokenRecepcion)).status).toBe(403);
+            expect((await verComprobante('CMP-999999', miembros[0].token)).status).toBe(404);
+            expect((await verComprobante('no-es-numero', miembros[0].token)).status).toBe(404);
+            expect((await verComprobante(numero)).status).toBe(401);
+        });
+
+        it('pagos simultáneos de cobros distintos: números correlativos, sin repetidos ni huecos', async () => {
+            const cobros = await Promise.all([6, 7, 8].map(async (i) => ({ i, ...(await compra(i)) })));
+            const respuestas = await Promise.all(cobros.map(({ i, cobroId }) => pagar(cobroId, miembros[i].token, APRUEBA)));
+
+            const numeros = respuestas.map((r) => numeroDe(r.body.comprobanteNumero)).sort((a, b) => a - b);
+            expect(new Set(numeros).size).toBe(3);
+            expect(numeros[2] - numeros[0]).toBe(2);
+        }, 20_000);
+
+        it('una confirmación que falla deshace todo y no consume número (sin huecos)', async () => {
+            // Pago de referencia: número N.
+            const antes = await compra(10);
+            const referencia = await pagar(antes.cobroId, miembros[10].token, APRUEBA);
+            expect(referencia.body.resultado).toBe('APROBADO');
+
+            // Se fuerza que activar la membresía falle: ya figura pagada con otra referencia.
+            const { membresiaId, cobroId } = await compra(9);
+            const hoyFecha = new Date(`${hoy}T00:00:00Z`);
+            await prisma.membresia.update({
+                where: { id: membresiaId },
+                data: { estado: 'PAGADA', pagoAplicadoRef: `OTRO-${corrida}`, fechaInicio: hoyFecha, fechaVencimiento: hoyFecha },
+            });
+            const fallido = await pagar(cobroId, miembros[9].token, APRUEBA);
+            expect(fallido.status).toBe(409);
+            const cobro = await prisma.cobro.findUniqueOrThrow({ where: { id: cobroId }, include: { comprobante: true } });
+            expect(cobro).toMatchObject({ estado: 'PENDIENTE', comprobante: null });
+            expect(await prisma.intentoPago.count({ where: { cobroId } })).toBe(0);
+
+            // El siguiente pago aprobado recibe N + 1: no se perdió ningún número.
+            const despues = await compra(11);
+            const siguiente = await pagar(despues.cobroId, miembros[11].token, APRUEBA);
+            expect(siguiente.body.resultado).toBe('APROBADO');
+            expect(numeroDe(siguiente.body.comprobanteNumero)).toBe(numeroDe(referencia.body.comprobanteNumero) + 1);
+        }, 20_000);
     });
 });

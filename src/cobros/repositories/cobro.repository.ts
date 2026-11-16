@@ -73,11 +73,18 @@ export class CobroRepository {
     /**
      * Pago aprobado, en una sola transacción:
      * 1. pasa el cobro de PENDIENTE a PAGADO solo si sigue PENDIENTE
-     *    (operación condicionada: de varios intentos a la vez, gana uno);
+     *    (operación condicionada: de varios intentos a la vez, gana uno; los
+     *    demás esperan el bloqueo de la fila y salen sin tomar número);
      * 2. registra el intento APROBADO;
-     * 3. emite el comprobante con el siguiente número CMP-000001;
-     * 4. ejecuta `confirmar` (p. ej. activar la membresía) con la misma
-     *    transacción: si falla, no queda nada.
+     * 3. ejecuta `confirmar` (p. ej. activar la membresía) con la misma
+     *    transacción: si falla, no queda nada;
+     * 4. al final, toma el siguiente número de `comprobante_numero_seq` y
+     *    emite el comprobante.
+     *
+     * El número se toma en el último paso a propósito: una secuencia nunca
+     * repite números, pero si la transacción se deshiciera DESPUÉS de tomarlo
+     * quedaría un hueco. Así, ni los intentos que pierden la carrera ni una
+     * confirmación que falla consumen un número.
      *
      * @returns el número del comprobante, o null si el cobro ya no estaba PENDIENTE.
      */
@@ -95,13 +102,14 @@ export class CobroRepository {
             if (count === 0) return null;
 
             const { id: intentoId } = await tx.intentoPago.create({ data: intento, select: { id: true } });
+            await confirmar(tx);
+
             const [{ numero }] = await tx.$queryRaw<{ numero: string }[]>`
                 SELECT 'CMP-' || lpad(nextval('comprobante_numero_seq')::text, 6, '0') AS numero
             `;
             await tx.comprobante.create({
                 data: { numero, cobroId: intento.cobroId, intentoId, ...montos, emitidoEn: pagadoEn },
             });
-            await confirmar(tx);
             return numero;
         });
     }

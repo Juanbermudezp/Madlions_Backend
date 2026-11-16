@@ -70,7 +70,7 @@ export class PagosService {
         const pagadoEn = new Date();
         const comprobanteNumero = await this.cobroRepository.confirmarPago(
             intento,
-            desglosarIva(cobro.monto.toNumber()),
+            desglosarIva(cobro.monto.toFixed(2)),
             pagadoEn,
             async (tx) => {
                 await confirmacion?.(
