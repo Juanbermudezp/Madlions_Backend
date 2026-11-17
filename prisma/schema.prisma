@@ -54,6 +54,27 @@ enum EstadoClase {
   @@map("estado_clase")
 }
 
+/// Estado de una reserva de clase (H5). Los dos estados de cancelación son
+/// finales: CANCELADA_MIEMBRO la pone H6 y CANCELADA_GIMNASIO la pone H7.
+enum EstadoReserva {
+  CONFIRMADA
+  CANCELADA_MIEMBRO
+  CANCELADA_GIMNASIO
+
+  @@map("estado_reserva")
+}
+
+/// Asistencia a una reserva; la registra el entrenador en H19. Tiene los mismos
+/// valores que la asistencia de las sesiones personales (H9), pero es un enum
+/// propio para que H5 y H9 no se pisen en el schema.
+enum AsistenciaReserva {
+  SIN_REGISTRAR
+  ASISTIO
+  NO_ASISTIO
+
+  @@map("asistencia_reserva")
+}
+
 /// Módulo que genera un aviso (Módulo 9). SESIONES y PAGOS quedan disponibles
 /// para avisos futuros.
 enum ModuloOrigen {
@@ -115,6 +136,7 @@ model Miembro {
   avisos Aviso[]
   membresias Membresia[]
   cobros Cobro[]
+  reservas Reserva[]
 
   @@map("miembro")
 }
@@ -184,6 +206,8 @@ model Clase {
   cupoMaximo   Int         @map("cupo_maximo")
   estado       EstadoClase @default(PROGRAMADA)
   creadoEn     DateTime    @default(now()) @map("creado_en")
+
+  reservas Reserva[]
 
   @@index([entrenadorId, inicio])
   @@index([inicio])
@@ -353,6 +377,7 @@ model Membresia {
   creadoEn              DateTime               @default(now()) @map("creado_en")
 
   tiposClase MembresiaTipoClase[]
+  reservas   Reserva[]
 
   @@index([miembroId, estado])
   @@map("membresia")
@@ -473,4 +498,35 @@ model Comprobante {
   emitidoEn  DateTime    @default(now()) @map("emitido_en")
 
   @@map("comprobante")
+}
+
+/// Reserva de un cupo en una clase grupal (H5, DB-5.1).
+///
+/// `membresiaId` es la membresía con la que se reservó: de ahí salen los
+/// créditos del set (créditos − reservas CONFIRMADA de esa membresía, BE-2.4).
+/// Los lugares disponibles de la clase y los créditos no se guardan: se
+/// calculan contando las reservas CONFIRMADA, así que cancelar libera ambos.
+///
+/// Lo que Prisma no puede expresar vive en la migración:
+/// - índice único parcial en (clase_id, miembro_id) cuando estado = CONFIRMADA
+///   (una sola reserva activa por miembro y clase; se puede volver a reservar
+///   después de cancelar, H6);
+/// - CHECK: cancelada_en es nulo solo si la reserva sigue CONFIRMADA.
+model Reserva {
+  id          String            @id @default(uuid()) @db.Uuid
+  claseId     String            @map("clase_id") @db.Uuid
+  clase       Clase             @relation(fields: [claseId], references: [id])
+  miembroId   String            @map("miembro_id") @db.Uuid
+  miembro     Miembro           @relation(fields: [miembroId], references: [id])
+  membresiaId String            @map("membresia_id") @db.Uuid
+  membresia   Membresia         @relation(fields: [membresiaId], references: [id])
+  estado      EstadoReserva     @default(CONFIRMADA)
+  asistencia  AsistenciaReserva @default(SIN_REGISTRAR)
+  creadaEn    DateTime          @default(now()) @map("creada_en")
+  canceladaEn DateTime?         @map("cancelada_en")
+
+  @@index([claseId, estado])
+  @@index([miembroId, estado])
+  @@index([membresiaId, estado])
+  @@map("reserva")
 }

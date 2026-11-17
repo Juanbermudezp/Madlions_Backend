@@ -3,6 +3,7 @@ import { PrismaService } from '@Prisma/services';
 import { ActividadTraslapadaError, ClaseNoModificableError } from '@Clases/errors';
 import {
   EstadoClase,
+  EstadoReserva,
   Rol,
   type Clase,
   type Prisma,
@@ -90,14 +91,19 @@ export class ClaseRepository {
   }
 
   /**
-   * Reservas confirmadas por clase.
-   *
-   * La tabla `reserva` llega con H5 (DB-5.1). Mientras no exista, ninguna
-   * clase tiene reservas; cuando exista, este es el único método que cambia:
-   * contar las reservas CONFIRMADA de cada clase con un groupBy.
+   * Reservas CONFIRMADA por clase (DB-5.1). Las clases sin reservas vuelven
+   * con 0, así que el mapa siempre trae todos los ids pedidos.
    */
-  contarReservasConfirmadas(claseIds: string[]): Promise<Map<string, number>> {
-    return Promise.resolve(new Map(claseIds.map((id) => [id, 0])));
+  async contarReservasConfirmadas(claseIds: string[]): Promise<Map<string, number>> {
+    const conteo = new Map(claseIds.map((id) => [id, 0]));
+    if (claseIds.length === 0) return conteo;
+    const grupos = await this.prisma.reserva.groupBy({
+      by: ['claseId'],
+      where: { claseId: { in: claseIds }, estado: EstadoReserva.CONFIRMADA },
+      _count: { _all: true },
+    });
+    for (const g of grupos) conteo.set(g.claseId, g._count._all);
+    return conteo;
   }
 
   /** @throws {ActividadTraslapadaError} si el entrenador ya tiene algo en ese horario. */
