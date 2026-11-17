@@ -116,6 +116,7 @@ model User {
   bloquesDisponibilidad BloqueDisponibilidad[]
   clases                Clase[]
   membresiasRegistradas Membresia[]
+  rutinasCreadas         Rutina[]
   @@map("usuario")
 }
 
@@ -138,7 +139,63 @@ model Miembro {
   cobros Cobro[]
   reservas Reserva[]
 
+  rutinas Rutina[]
+
   @@map("miembro")
+}
+
+/// H14: rutina asignada a un miembro y creada por un entrenador.
+/// Los CHECK de textos no vacíos viven en la migración DB-14.1.
+/// actualizadoEn lo mantiene Prisma (@updatedAt), como en Plan.
+/// BE-14 debe validar el rol ENTRENADOR y crear al menos un día con ejercicios
+/// en una transacción; las FK no autorizan usuarios ni garantizan hijos mínimos.
+model Rutina {
+  id            String   @id @default(uuid()) @db.Uuid
+  miembroId     String   @map("miembro_id") @db.Uuid
+  miembro       Miembro  @relation(fields: [miembroId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  entrenadorId  String   @map("entrenador_id") @db.Uuid
+  entrenador    User     @relation(fields: [entrenadorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  nombre        String   @db.VarChar(60)
+  objetivo      String   @db.VarChar(200)
+  fechaInicio   DateTime @map("fecha_inicio") @db.Date
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  dias RutinaDia[]
+
+  @@index([miembroId, fechaInicio])
+  @@index([entrenadorId, miembroId])
+  @@map("rutina")
+}
+
+/// El orden único y el CHECK 1..7 limitan a siete días por rutina.
+model RutinaDia {
+  id       String @id @default(uuid()) @db.Uuid
+  rutinaId String @map("rutina_id") @db.Uuid
+  rutina   Rutina @relation(fields: [rutinaId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  orden    Int
+  nombre   String @db.VarChar(40)
+
+  ejercicios RutinaEjercicio[]
+
+  @@unique([rutinaId, orden])
+  @@map("rutina_dia")
+}
+
+/// CHECK manuales: orden 1..15, series 1..10, repeticiones 1..50,
+/// descanso 0..600 y nombre no vacío. Orden único por día.
+model RutinaEjercicio {
+  id           String    @id @default(uuid()) @db.Uuid
+  diaId        String    @map("dia_id") @db.Uuid
+  dia          RutinaDia @relation(fields: [diaId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  orden        Int
+  nombre       String    @db.VarChar(60)
+  series       Int
+  repeticiones Int
+  descansoSeg  Int       @map("descanso_seg")
+
+  @@unique([diaId, orden])
+  @@map("rutina_ejercicio")
 }
 
 model RefreshToken {
