@@ -95,6 +95,8 @@ model User {
   bloquesDisponibilidad BloqueDisponibilidad[]
   clases                Clase[]
   membresiasRegistradas Membresia[]
+  accesosRegistrados    RegistroAcceso[] @relation("AccesoRegistradoPor")
+  salidasRegistradas    RegistroAcceso[] @relation("AccesoSalidaRegistradaPor")
   sesionesPersonales    SesionPersonal[]
   @@map("usuario")
 }
@@ -116,6 +118,7 @@ model Miembro {
     avisos Aviso[]
   membresias Membresia[]
   cobros Cobro[]
+  registrosAcceso RegistroAcceso[]
   sesionesPersonales SesionPersonal[]
 
   @@map("miembro")
@@ -474,6 +477,14 @@ enum ResultadoPago {
   @@map("resultado_pago")
 }
 
+enum EstadoAcceso {
+  DENTRO
+  SALIO
+  CERRADO_AUTO
+
+  @@map("estado_acceso")
+}
+
 /// Intento de pago de un cobro en la pasarela simulada (H12).
 ///
 /// Nunca guarda el número completo de la tarjeta ni el código de seguridad:
@@ -512,4 +523,25 @@ model Comprobante {
   emitidoEn  DateTime    @default(now()) @map("emitido_en")
 
   @@map("comprobante")
+}
+
+
+
+model RegistroAcceso {
+  id                    String       @id @default(uuid()) @db.Uuid
+  miembroId             String       @map("miembro_id") @db.Uuid
+  miembro               Miembro      @relation(fields: [miembroId], references: [id], onDelete: Restrict)
+  ingresoEn             DateTime     @default(now()) @map("ingreso_en")
+  salidaEn              DateTime?    @map("salida_en")
+  estado                EstadoAcceso @default(DENTRO)
+  registradoPorId       String       @map("registrado_por") @db.Uuid
+  registradoPor         User         @relation("AccesoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  salidaRegistradaPorId String?      @map("salida_registrada_por") @db.Uuid
+  salidaRegistradaPor   User?        @relation("AccesoSalidaRegistradaPor", fields: [salidaRegistradaPorId], references: [id], onDelete: Restrict)
+  estadoMembresia       String       @map("estado_membresia") @db.VarChar(30)
+  motivoExcepcion       String?      @map("motivo_excepcion") @db.VarChar(250)
+
+  @@index([miembroId, estado])
+  @@index([ingresoEn])
+  @@map("registro_acceso")
 }
