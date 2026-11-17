@@ -68,6 +68,8 @@
       "@Cobros/*": ["./src/cobros/*/index.ts"],
       "@Sesiones": ["./src/sesiones/index.ts"],
       "@Sesiones/*": ["./src/sesiones/*/index.ts"],
+      "@Accesos": ["./src/accesos/index.ts"],
+      "@Accesos/*": ["./src/accesos/*/index.ts"],
     }
   }
 }

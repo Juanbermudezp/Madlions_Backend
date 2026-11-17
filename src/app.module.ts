@@ -17,6 +17,7 @@ import { MiembrosModule } from '@Miembros';
 import { MembresiasModule } from '@Membresias';
 import { CobrosModule } from '@Cobros';
 import { SesionesModule } from '@Sesiones';
+import { AccesosModule } from '@Accesos';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { SesionesModule } from '@Sesiones';
     MembresiasModule,
     CobrosModule,
     SesionesModule,
+    AccesosModule,
   ],
   providers: [
     {
