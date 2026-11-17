@@ -58,6 +58,12 @@
       "@Planes/*": ["./src/planes/*/index.ts"],
       "@Configuracion": ["./src/configuracion/index.ts"],
       "@Configuracion/*": ["./src/configuracion/*/index.ts"],
+      "@Membresias": ["./src/membresias/index.ts"],
+      "@Membresias/*": ["./src/membresias/*/index.ts"],
+      "@Miembros": ["./src/miembros/index.ts"],
+      "@Miembros/*": ["./src/miembros/*/index.ts"],
+      "@Cobros": ["./src/cobros/index.ts"],
+      "@Cobros/*": ["./src/cobros/*/index.ts"],
       "@Maquinas": ["./src/maquinas/index.ts"],
       "@Maquinas/*": ["./src/maquinas/*/index.ts"],
     }
