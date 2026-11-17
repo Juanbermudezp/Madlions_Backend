@@ -95,9 +95,9 @@ export class SesionesService {
                 if (await this.sesionRepository.hayTraslape(miembroId, bloque.inicio, bloque.fin, tx)) {
                     throw new AgendaRechazadaError(MENSAJES_AGENDA.TRASLAPE_SESION);
                 }
-                // Traslape con clases reservadas: se agrega aquí cuando exista la
-                // reserva de clases (H5), con el mensaje correspondiente.
-
+                if (await this.sesionRepository.hayTraslapeConReserva(miembroId, bloque.inicio, bloque.fin, tx)) {
+                    throw new AgendaRechazadaError(MENSAJES_AGENDA.TRASLAPE_CLASE);
+                }
                 // El id de la sesión se genera antes para que el cobro la referencie.
                 const id = randomUUID();
                 const cobro = await this.cobrosService.crearCobro(
