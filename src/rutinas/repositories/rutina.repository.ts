@@ -33,6 +33,14 @@ export class RutinaRepository {
     return this.prisma.rutina.findUnique({ where: { id } });
   }
 
+  /** S14: basta cualquier asignación, independientemente de su fecha de inicio. */
+  async tieneAsignacion(entrenadorId: string, miembroId: string): Promise<boolean> {
+    const rutina = await this.prisma.rutina.findFirst({
+      where: { entrenadorId, miembroId }, select: { id: true },
+    });
+    return rutina !== null;
+  }
+
   listar(entrenadorId: string, miembroId?: string): Promise<RutinaCompleta[]> {
     return this.prisma.rutina.findMany({
       where: { entrenadorId, ...(miembroId ? { miembroId } : {}) },
