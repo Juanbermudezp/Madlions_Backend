@@ -4,6 +4,7 @@ import { MembresiaPendienteError } from '@Membresias/errors';
 import type { MembresiaParaEstado } from '../services/reglas-estado.js';
 import {
     EstadoMembresia,
+    EstadoReserva,
     Prisma,
     type Cobro,
     type Membresia,
@@ -195,13 +196,18 @@ export class MembresiaRepository {
     }
 
     /**
-     * Reservas CONFIRMADA de cada membresía, para los créditos disponibles.
-     *
-     * La tabla `reserva` llega con H5. Mientras no exista, ninguna membresía
-     * tiene reservas; cuando exista, este es el único método que cambia:
-     * contar las reservas CONFIRMADA por membresía con un groupBy.
+     * Reservas CONFIRMADA de cada membresía, para los créditos disponibles
+     * (DB-5.1). Las membresías sin reservas vuelven con 0.
      */
-    contarReservasConfirmadas(membresiaIds: string[]): Promise<Map<string, number>> {
-        return Promise.resolve(new Map(membresiaIds.map((id) => [id, 0])));
+    async contarReservasConfirmadas(membresiaIds: string[]): Promise<Map<string, number>> {
+        const conteo = new Map(membresiaIds.map((id) => [id, 0]));
+        if (membresiaIds.length === 0) return conteo;
+        const grupos = await this.prisma.reserva.groupBy({
+            by: ['membresiaId'],
+            where: { membresiaId: { in: membresiaIds }, estado: EstadoReserva.CONFIRMADA },
+            _count: { _all: true },
+        });
+        for (const g of grupos) conteo.set(g.membresiaId, g._count._all);
+        return conteo;
     }
 }
