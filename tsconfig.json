@@ -64,6 +64,8 @@
       "@Miembros/*": ["./src/miembros/*/index.ts"],
       "@Cobros": ["./src/cobros/index.ts"],
       "@Cobros/*": ["./src/cobros/*/index.ts"],
+      "@Reservas": ["./src/reservas/index.ts"],
+      "@Reservas/*": ["./src/reservas/*/index.ts"],
     }
   }
 }
