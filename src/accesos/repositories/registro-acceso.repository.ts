@@ -101,4 +101,15 @@ export class RegistroAccesoRepository {
             orderBy: { ingresoEn: 'desc' },
         });
     }
+
+    async cerrarAbiertosDelDia(desde: Date, salidaEn: Date): Promise<number> {
+        const { count } = await this.prisma.registroAcceso.updateMany({
+            where: {
+                estado: EstadoAcceso.DENTRO,
+                ingresoEn: { gte: desde, lte: salidaEn },
+            },
+            data: { estado: EstadoAcceso.CERRADO_AUTO, salidaEn },
+        });
+        return count;
+    }
 }

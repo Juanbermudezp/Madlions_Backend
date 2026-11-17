@@ -18,6 +18,7 @@ import { MembresiasModule } from '@Membresias';
 import { CobrosModule } from '@Cobros';
 import { SesionesModule } from '@Sesiones';
 import { AccesosModule } from '@Accesos';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AccesosModule } from '@Accesos';
     CobrosModule,
     SesionesModule,
     AccesosModule,
+    ScheduleModule.forRoot(),
   ],
   providers: [
     {
