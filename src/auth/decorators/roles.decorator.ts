@@ -4,3 +4,8 @@ import type { Rol } from '@PrismaClient';
 export const ROLES_KEY = 'roles';
 
 export const Roles = (...roles: Rol[]) => SetMetadata(ROLES_KEY, roles);
+
+export const MENSAJE_SIN_PERMISO_KEY = 'mensajeSinPermiso';
+
+export const MensajeSinPermiso = (mensaje: string) =>
+    SetMetadata(MENSAJE_SIN_PERMISO_KEY, mensaje);
