@@ -1,9 +1,11 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import type { AvisosService } from '@Avisos/services';
+import type { EstadoMembresiaService } from '@Membresias/services';
 import type { ClaseConRelaciones, ClaseRepository } from '@Clases/repositories';
-import type { ReservaConClase, ReservaRepository } from '@Reservas/repositories';
-import { AsistenciaReserva, EstadoClase, EstadoReserva } from '@PrismaClient';
+import type { ClaseBloqueada, ReservaConClase, ReservaRepository } from '@Reservas/repositories';
+import { AsistenciaReserva, EstadoClase, EstadoReserva, ModuloOrigen, Prisma } from '@PrismaClient';
 import { ReservasService } from './reservas.service.js';
-import { MENSAJES_RESERVA } from './reglas-reserva.js';
+import { MENSAJES_RESERVA, RECHAZOS_RESERVA } from './reglas-reserva.js';
 
 // Martes 10 de noviembre de 2026, 09:00 en El Salvador.
 const AHORA = new Date('2026-11-10T15:00:00Z');
@@ -30,11 +32,23 @@ describe('ReservasService (BE-5.1)', () => {
         findMiembroIdDeUsuario: vi.fn(),
         findClasesReservadasPor: vi.fn(),
         findDelMiembro: vi.fn(),
+        transaccion: vi.fn(),
+        bloquearClase: vi.fn(),
+        bloquearMembresia: vi.fn(),
+        contarConfirmadasDeClase: vi.fn(),
+        contarConfirmadasDeMembresia: vi.fn(),
+        existeConfirmada: vi.fn(),
+        tieneTraslape: vi.fn(),
+        crear: vi.fn(),
     };
     const claseRepo = { findEntre: vi.fn(), contarReservasConfirmadas: vi.fn() };
+    const estadoMembresia = { obtenerEstado: vi.fn() };
+    const avisos = { enviar: vi.fn() };
     const service = new ReservasService(
         reservaRepo as unknown as ReservaRepository,
         claseRepo as unknown as ClaseRepository,
+        estadoMembresia as unknown as EstadoMembresiaService,
+        avisos as unknown as AvisosService,
     );
 
     beforeEach(() => {
@@ -143,6 +157,117 @@ describe('ReservasService (BE-5.1)', () => {
             reservaRepo.findMiembroIdDeUsuario.mockResolvedValue(null);
             expect(await service.listarMias('u1', 'proximas', AHORA)).toEqual([]);
             expect(reservaRepo.findDelMiembro).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('reservar (BE-5.2)', () => {
+        const TX = { soyLaTransaccion: true };
+        const claseBloqueada = (datos: Partial<ClaseBloqueada> = {}): ClaseBloqueada => ({
+            id: 'c1',
+            estado: 'PROGRAMADA',
+            inicio: new Date('2026-11-11T13:00:00Z'),
+            fin: new Date('2026-11-11T14:00:00Z'),
+            cupoMaximo: 10,
+            tipoClaseId: 't1',
+            tipo: 'Yoga',
+            entrenador: 'Carlos Martínez',
+            ...datos,
+        });
+
+        beforeEach(() => {
+            reservaRepo.transaccion.mockImplementation((fn: (tx: unknown) => unknown) => fn(TX));
+            reservaRepo.bloquearClase.mockResolvedValue(claseBloqueada());
+            reservaRepo.contarConfirmadasDeClase.mockResolvedValue(3);
+            reservaRepo.contarConfirmadasDeMembresia.mockResolvedValue(0);
+            reservaRepo.existeConfirmada.mockResolvedValue(false);
+            reservaRepo.tieneTraslape.mockResolvedValue(false);
+            reservaRepo.crear.mockResolvedValue({ id: 'r9' });
+            estadoMembresia.obtenerEstado.mockResolvedValue({
+                estado: 'VIGENTE',
+                membresiaId: 's1',
+                fechaInicio: '2026-11-01',
+                fechaVencimiento: '2026-11-30',
+                tiposClaseIds: ['t1'],
+                creditosTotales: null,
+            });
+            avisos.enviar.mockResolvedValue({ creados: 1, omitidosPorDuplicado: 0 });
+        });
+
+        it('registra la reserva con la membresía vigente y devuelve los lugares que quedan', async () => {
+            const res = await service.reservar('u1', 'c1', AHORA);
+
+            expect(res).toEqual({ id: 'r9', estado: EstadoReserva.CONFIRMADA, lugaresDisponibles: 6 });
+            expect(estadoMembresia.obtenerEstado).toHaveBeenCalledWith('m1', '2026-11-10');
+            expect(reservaRepo.bloquearClase).toHaveBeenCalledWith(TX, 'c1');
+            expect(reservaRepo.bloquearMembresia).toHaveBeenCalledWith(TX, 's1');
+            expect(reservaRepo.crear).toHaveBeenCalledWith(TX, { claseId: 'c1', miembroId: 'm1', membresiaId: 's1' });
+        });
+
+        it('envía el aviso "Reserva confirmada" después de la transacción', async () => {
+            await service.reservar('u1', 'c1', AHORA);
+
+            expect(avisos.enviar).toHaveBeenCalledWith({
+                destinatarios: ['m1'],
+                moduloOrigen: ModuloOrigen.CLASES,
+                referencia: 'reserva-r9-confirmada',
+                titulo: 'Reserva confirmada: Yoga',
+                mensaje:
+                    'Tu lugar en Yoga del 11/11/2026 de 07:00 a 08:00 con Carlos Martínez quedó reservado. ' +
+                    'Puedes cancelar hasta 2 horas antes del inicio.',
+            });
+            expect(reservaRepo.transaccion.mock.invocationCallOrder[0]).toBeLessThan(
+                avisos.enviar.mock.invocationCallOrder[0],
+            );
+        });
+
+        it('si el aviso falla, la reserva igual queda confirmada', async () => {
+            const log = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+            avisos.enviar.mockRejectedValue(new Error('base caída'));
+            await expect(service.reservar('u1', 'c1', AHORA)).resolves.toMatchObject({ id: 'r9' });
+            expect(log).toHaveBeenCalled();
+            log.mockRestore();
+        });
+
+        it('404 si la clase no existe', async () => {
+            reservaRepo.bloquearClase.mockResolvedValue(null);
+            await expect(service.reservar('u1', 'c1', AHORA)).rejects.toBeInstanceOf(NotFoundException);
+            expect(reservaRepo.crear).not.toHaveBeenCalled();
+        });
+
+        it('409 con el motivo y sin crear nada ni avisar cuando la clase está llena', async () => {
+            reservaRepo.contarConfirmadasDeClase.mockResolvedValue(10);
+            await expect(service.reservar('u1', 'c1', AHORA)).rejects.toThrow(
+                new ConflictException(RECHAZOS_RESERVA.llena),
+            );
+            expect(reservaRepo.crear).not.toHaveBeenCalled();
+            expect(avisos.enviar).not.toHaveBeenCalled();
+        });
+
+        it('cuenta los créditos usados dentro de la transacción', async () => {
+            estadoMembresia.obtenerEstado.mockResolvedValue({
+                estado: 'VIGENTE', membresiaId: 's1', fechaInicio: '2026-11-01', fechaVencimiento: '2026-11-30',
+                tiposClaseIds: ['t1'], creditosTotales: 8,
+            });
+            reservaRepo.contarConfirmadasDeMembresia.mockResolvedValue(8);
+            await expect(service.reservar('u1', 'c1', AHORA)).rejects.toThrow(RECHAZOS_RESERVA.sinCreditos);
+        });
+
+        it('409 "Necesitas una membresía vigente" si no tiene membresía ni ficha', async () => {
+            estadoMembresia.obtenerEstado.mockResolvedValue({ estado: 'SIN_MEMBRESIA', membresiaId: null });
+            await expect(service.reservar('u1', 'c1', AHORA)).rejects.toThrow(RECHAZOS_RESERVA.sinMembresiaVigente);
+            expect(reservaRepo.bloquearMembresia).not.toHaveBeenCalled();
+
+            reservaRepo.findMiembroIdDeUsuario.mockResolvedValue(null);
+            await expect(service.reservar('u1', 'c1', AHORA)).rejects.toThrow(RECHAZOS_RESERVA.sinMembresiaVigente);
+        });
+
+        it('convierte la violación del índice único (doble clic) en "Ya reservaste esta clase"', async () => {
+            reservaRepo.crear.mockRejectedValue(
+                new Prisma.PrismaClientKnownRequestError('unique', { code: 'P2002', clientVersion: 'x' }),
+            );
+            await expect(service.reservar('u1', 'c1', AHORA)).rejects.toThrow(
+                new ConflictException(RECHAZOS_RESERVA.yaReservada),
+            );
         });
     });
 });
