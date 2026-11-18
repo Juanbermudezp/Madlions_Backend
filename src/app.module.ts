@@ -15,6 +15,7 @@ import { ConfiguracionModule } from '@Configuracion';
 import { MiembrosModule } from '@Miembros';
 import { MembresiasModule } from '@Membresias';
 import { CobrosModule } from '@Cobros';
+import { RutinasModule } from './rutinas/index.js';
 import { ReservasModule } from '@Reservas';
 import { MaquinasModule } from '@Maquinas';
 
@@ -37,6 +38,7 @@ import { MaquinasModule } from '@Maquinas';
     MiembrosModule,
     MembresiasModule,
     CobrosModule,
+    RutinasModule,
     ReservasModule,
     MaquinasModule,
   ],
