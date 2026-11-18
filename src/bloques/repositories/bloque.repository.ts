@@ -5,15 +5,18 @@ import {
     EstadoBloque,
     EstadoClase,
     type BloqueDisponibilidad,
-} from '@PrismaClient';
-
+    type Prisma,
+} from '@PrismaClient'; 
 export interface CrearBloqueData {
     entrenadorId: string;
     inicio: Date;
     fin: Date;
     duracionMin: number;
 }
-
+/** Bloque con el nombre de su entrenador (H9). */
+export type BloqueConEntrenador = BloqueDisponibilidad & {
+    entrenador: { nombre: string; apellido: string };
+};
 @Injectable()
 export class BloqueRepository {
     constructor(private readonly prisma: PrismaService) { }
@@ -32,6 +35,52 @@ export class BloqueRepository {
             where: { entrenadorId, inicio: { gte: desde, lt: hasta } },
             orderBy: { inicio: 'asc' },
         });
+    }
+
+    /**
+ * Bloques DISPONIBLES del entrenador que empiezan entre `desde` y `hasta`,
+ * ambos incluidos (H9). Es la vista del miembro: nunca incluye OCUPADOS.
+ */
+    findDisponiblesDelEntrenadorEntre(
+        entrenadorId: string,
+        desde: Date,
+        hasta: Date,
+    ): Promise<BloqueDisponibilidad[]> {
+        return this.prisma.bloqueDisponibilidad.findMany({
+            where: {
+                entrenadorId,
+                estado: EstadoBloque.DISPONIBLE,
+                inicio: { gte: desde, lte: hasta },
+            },
+            orderBy: { inicio: 'asc' },
+        });
+    }
+
+        /** Bloque con el nombre de su entrenador, o null si no existe (H9). */
+    findConEntrenador(id: string): Promise<BloqueConEntrenador | null> {
+        return this.prisma.bloqueDisponibilidad.findUnique({
+            where: { id },
+            include: { entrenador: { select: { nombre: true, apellido: true } } },
+        });
+    }
+
+    /**
+     * Pasa el bloque a OCUPADO solo si sigue DISPONIBLE, dentro de la
+     * transacción del agendamiento (H9).
+     *
+     * Es una operación condicionada: si dos miembros confirman el mismo bloque
+     * a la vez, PostgreSQL bloquea la fila; el segundo espera, vuelve a evaluar
+     * `estado = DISPONIBLE` cuando el primero termina y ya no actualiza nada.
+     *
+     * @returns true si lo ocupó; false si ya no estaba disponible.
+     */
+    
+    async ocuparSiDisponible(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
+        const { count } = await tx.bloqueDisponibilidad.updateMany({
+            where: { id, estado: EstadoBloque.DISPONIBLE },
+            data: { estado: EstadoBloque.OCUPADO },
+        });
+        return count > 0;
     }
 
     crearSinTraslape(data: CrearBloqueData): Promise<BloqueDisponibilidad> {

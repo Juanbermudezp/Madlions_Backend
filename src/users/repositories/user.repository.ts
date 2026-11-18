@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
 import { EmailAlreadyTakenError } from '@Users/errors';
-import { Prisma, type Rol, type User } from '@PrismaClient';
+import { Prisma, Rol, type User } from '@PrismaClient';
 
 /** Código de Prisma para violación de restricción única. */
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
@@ -26,7 +26,7 @@ export interface CreateUserData {
  */
 @Injectable()
 export class UserRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * @throws {EmailAlreadyTakenError} si el email ya está registrado.
@@ -59,6 +59,21 @@ export class UserRepository {
   findByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { email: this.normalizeEmail(email) },
+    });
+  }
+
+  /** Entrenadores activos, ordenados por nombre (H9). */
+  findEntrenadoresActivos(): Promise<User[]> {
+    return this.prisma.user.findMany({
+      where: { rol: Rol.ENTRENADOR, isActive: true },
+      orderBy: [{ nombre: 'asc' }, { apellido: 'asc' }],
+    });
+  }
+
+  /** Un entrenador activo por id; null si no existe, no es entrenador o está inactivo (H9). */
+  findEntrenadorActivoById(id: string): Promise<User | null> {
+    return this.prisma.user.findFirst({
+      where: { id, rol: Rol.ENTRENADOR, isActive: true },
     });
   }
 
