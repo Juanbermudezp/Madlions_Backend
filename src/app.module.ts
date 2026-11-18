@@ -16,7 +16,11 @@ import { EntrenadoresModule } from '@Entrenadores';
 import { MiembrosModule } from '@Miembros';
 import { MembresiasModule } from '@Membresias';
 import { CobrosModule } from '@Cobros';
+import { CobrosModule } from '@Cobros';
 import { SesionesModule } from '@Sesiones';
+import { RutinasModule } from './rutinas/index.js';
+import { ReservasModule } from '@Reservas';
+import { MaquinasModule } from '@Maquinas';
 
 @Module({
   imports: [
@@ -37,8 +41,11 @@ import { SesionesModule } from '@Sesiones';
     EntrenadoresModule,
     MiembrosModule,
     MembresiasModule,
-    CobrosModule,
+     CobrosModule,
     SesionesModule,
+    RutinasModule,
+    ReservasModule,
+    MaquinasModule,
   ],
   providers: [
     {

@@ -122,6 +122,11 @@ export class ProgresoService {
 
   async listarMio(usuarioId: string, query: ProgresoQueryDto): Promise<{ series: SerieProgreso[] }> {
     const miembroId = await this.miembroIdDeUsuario(usuarioId);
+    return this.listarPorMiembro(miembroId, query);
+  }
+
+  /** Consulta interna compartida. El llamador debe autorizar primero el acceso. */
+  async listarPorMiembro(miembroId: string, query: ProgresoQueryDto): Promise<{ series: SerieProgreso[] }> {
     validarFiltroFechas(query.desde, query.hasta);
     const registros = await this.repository.listar(miembroId, {
       tipo: query.tipo,

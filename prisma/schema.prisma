@@ -117,6 +117,9 @@ model User {
   clases                Clase[]
   membresiasRegistradas Membresia[]
   sesionesPersonales    SesionPersonal[]
+  rutinasCreadas        Rutina[]
+  maquinasActualizadas  Maquina[]
+
   @@map("usuario")
 }
 
@@ -134,13 +137,69 @@ model Miembro {
   createdAt     DateTime @default(now()) @map("created_at")
   registrosProgreso RegistroProgreso[] 
 
-    avisos Aviso[]
+  avisos Aviso[]
   membresias Membresia[]
   cobros Cobro[]
   sesionesPersonales SesionPersonal[]
   reservas Reserva[]
 
+  rutinas Rutina[]
+
   @@map("miembro")
+}
+
+/// H14: rutina asignada a un miembro y creada por un entrenador.
+/// Los CHECK de textos no vacíos viven en la migración DB-14.1.
+/// actualizadoEn lo mantiene Prisma (@updatedAt), como en Plan.
+/// BE-14 debe validar el rol ENTRENADOR y crear al menos un día con ejercicios
+/// en una transacción; las FK no autorizan usuarios ni garantizan hijos mínimos.
+model Rutina {
+  id            String   @id @default(uuid()) @db.Uuid
+  miembroId     String   @map("miembro_id") @db.Uuid
+  miembro       Miembro  @relation(fields: [miembroId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  entrenadorId  String   @map("entrenador_id") @db.Uuid
+  entrenador    User     @relation(fields: [entrenadorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  nombre        String   @db.VarChar(60)
+  objetivo      String   @db.VarChar(200)
+  fechaInicio   DateTime @map("fecha_inicio") @db.Date
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  dias RutinaDia[]
+
+  @@index([miembroId, fechaInicio])
+  @@index([entrenadorId, miembroId])
+  @@map("rutina")
+}
+
+/// El orden único y el CHECK 1..7 limitan a siete días por rutina.
+model RutinaDia {
+  id       String @id @default(uuid()) @db.Uuid
+  rutinaId String @map("rutina_id") @db.Uuid
+  rutina   Rutina @relation(fields: [rutinaId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  orden    Int
+  nombre   String @db.VarChar(40)
+
+  ejercicios RutinaEjercicio[]
+
+  @@unique([rutinaId, orden])
+  @@map("rutina_dia")
+}
+
+/// CHECK manuales: orden 1..15, series 1..10, repeticiones 1..50,
+/// descanso 0..600 y nombre no vacío. Orden único por día.
+model RutinaEjercicio {
+  id           String    @id @default(uuid()) @db.Uuid
+  diaId        String    @map("dia_id") @db.Uuid
+  dia          RutinaDia @relation(fields: [diaId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  orden        Int
+  nombre       String    @db.VarChar(60)
+  series       Int
+  repeticiones Int
+  descansoSeg  Int       @map("descanso_seg")
+
+  @@unique([diaId, orden])
+  @@map("rutina_ejercicio")
 }
 
 model RefreshToken {
@@ -364,6 +423,65 @@ model SesionPersonal {
   @@index([entrenadorId, inicio])
   @@map("sesion_personal")
 }
+
+/// Tipo de máquina del inventario (H17).
+enum TipoMaquina {
+  CARDIO
+  FUERZA
+  PESO_LIBRE
+  FUNCIONAL
+
+  @@map("tipo_maquina")
+}
+
+/// Zona del gimnasio donde está la máquina (H17).
+enum ZonaMaquina {
+  PISO_1
+  PISO_2
+  AREA_FUNCIONAL
+
+  @@map("zona_maquina")
+}
+
+/// Estado operativo de una máquina (H17). Lo cambian el administrador y el
+/// entrenador (H18, supuesto S13).
+enum EstadoMaquina {
+  OPERATIVA
+  EN_MANTENIMIENTO
+  FUERA_DE_SERVICIO
+
+  @@map("estado_maquina")
+}
+
+/// Máquina del inventario del gimnasio (H17).
+///
+/// `ultimoMotivo` y `ultimoCambioPor` son datos internos: solo el
+/// administrador y el entrenador los reciben. El filtrado lo hace el DTO de
+/// respuesta en el backend (BE-17.1), nunca el frontend.
+///
+/// El historial completo de cambios vive en otra tabla (H18, DB-18.1); estas
+/// dos columnas son la caché del último cambio para no consultarlo al listar.
+///
+/// Las restricciones que Prisma no puede expresar viven como CHECK en la
+/// migración: formato del código (MAQ-000), largo del nombre y del motivo, y
+/// la coherencia entre el estado y la fecha estimada de retorno (una máquina
+/// operativa no tiene fecha de retorno pendiente).
+model Maquina {
+  id                   String        @id @default(uuid()) @db.Uuid
+  codigo               String        @unique @db.VarChar(10)
+  nombre               String        @db.VarChar(60)
+  tipo                 TipoMaquina
+  zona                 ZonaMaquina
+  estado               EstadoMaquina @default(OPERATIVA)
+  fechaEstimadaRetorno DateTime?     @map("fecha_estimada_retorno") @db.Date
+  ultimoMotivo         String?       @map("ultimo_motivo") @db.VarChar(250)
+  ultimoCambioPorId    String?       @map("ultimo_cambio_por") @db.Uuid
+  ultimoCambioPor      User?         @relation(fields: [ultimoCambioPorId], references: [id], onDelete: SetNull)
+  actualizadoEn        DateTime      @default(now()) @updatedAt @map("actualizado_en")
+
+  @@map("maquina")
+}
+
 /// Operación con la que se registró una membresía (H2).
 enum TipoOperacionMembresia {
   COMPRA
