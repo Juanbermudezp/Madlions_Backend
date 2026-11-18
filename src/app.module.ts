@@ -16,6 +16,8 @@ import { MiembrosModule } from '@Miembros';
 import { MembresiasModule } from '@Membresias';
 import { CobrosModule } from '@Cobros';
 import { RutinasModule } from './rutinas/index.js';
+import { ReservasModule } from '@Reservas';
+import { MaquinasModule } from '@Maquinas';
 
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { RutinasModule } from './rutinas/index.js';
     MembresiasModule,
     CobrosModule,
     RutinasModule,
+    ReservasModule,
+    MaquinasModule,
   ],
   providers: [
     {
