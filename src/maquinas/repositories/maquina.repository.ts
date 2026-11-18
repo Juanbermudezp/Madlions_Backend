@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
 import {
     EstadoMaquina,
+    type HistorialMaquina,
     type Maquina,
     type Prisma,
     type TipoMaquina,
@@ -26,6 +27,21 @@ const INCLUIR_ULTIMO_CAMBIO = {
 export type MaquinaConUltimoCambio = Maquina & {
     ultimoCambioPor: { id: string; nombre: string; apellido: string } | null;
 };
+
+// Cambio de estado del historial, con quién lo hizo (H18).
+export type CambioConUsuario = HistorialMaquina & {
+    cambiadoPor: { id: string; nombre: string; apellido: string };
+};
+
+// Lo que hace falta para registrar un cambio de estado (H18).
+export interface DatosCambioEstado {
+    maquinaId: string;
+    estadoAnterior: EstadoMaquina;
+    estadoNuevo: EstadoMaquina;
+    motivo: string;
+    fechaEstimadaRetorno: Date | null;
+    usuarioId: string;
+}
 
 // Resumen vacío: los tres estados en 0, para que el conteo nunca omita uno.
 function resumenEnCero(): Record<EstadoMaquina, number> {
@@ -73,6 +89,61 @@ export class MaquinaRepository {
             resumen[grupo.estado] = grupo._count._all;
             return resumen;
         }, resumenEnCero());
+    }
+
+    findById(id: string): Promise<MaquinaConUltimoCambio | null> {
+        return this.prisma.maquina.findUnique({
+            where: { id },
+            include: INCLUIR_ULTIMO_CAMBIO,
+        });
+    }
+
+    /**
+     * Cambia el estado y deja el cambio en el historial en una sola
+     * transacción (criterio técnico de BE-18.1).
+     *
+     * El UPDATE exige que la máquina siga en `estadoAnterior`: si otra
+     * petición le ganó, no actualiza nada y devuelve null en vez de registrar
+     * un cambio que no pasó.
+     */
+    cambiarEstado(datos: DatosCambioEstado): Promise<MaquinaConUltimoCambio | null> {
+        return this.prisma.$transaction(async (tx) => {
+            const { count } = await tx.maquina.updateMany({
+                where: { id: datos.maquinaId, estado: datos.estadoAnterior },
+                data: {
+                    estado: datos.estadoNuevo,
+                    fechaEstimadaRetorno: datos.fechaEstimadaRetorno,
+                    ultimoMotivo: datos.motivo,
+                    ultimoCambioPorId: datos.usuarioId,
+                },
+            });
+            if (count === 0) return null;
+
+            await tx.historialMaquina.create({
+                data: {
+                    maquinaId: datos.maquinaId,
+                    estadoAnterior: datos.estadoAnterior,
+                    estadoNuevo: datos.estadoNuevo,
+                    motivo: datos.motivo,
+                    fechaEstimadaRetorno: datos.fechaEstimadaRetorno,
+                    cambiadoPorId: datos.usuarioId,
+                },
+            });
+
+            return tx.maquina.findUniqueOrThrow({
+                where: { id: datos.maquinaId },
+                include: INCLUIR_ULTIMO_CAMBIO,
+            });
+        });
+    }
+
+    /** Historial de una máquina, del más reciente al más antiguo (criterio 3). */
+    findHistorial(maquinaId: string): Promise<CambioConUsuario[]> {
+        return this.prisma.historialMaquina.findMany({
+            where: { maquinaId },
+            orderBy: { cambiadoEn: 'desc' },
+            include: { cambiadoPor: { select: { id: true, nombre: true, apellido: true } } },
+        });
     }
 
     private armarWhere(filtros: FiltrosMaquina): Prisma.MaquinaWhereInput {
