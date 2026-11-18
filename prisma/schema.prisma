@@ -116,7 +116,9 @@ model User {
   bloquesDisponibilidad BloqueDisponibilidad[]
   clases                Clase[]
   membresiasRegistradas Membresia[]
-  sesionesPersonales    SesionPersonal[]
+  sesionesPersonales    SesionPersonal[] @relation("SesionDelEntrenador")
+  asistenciasReservaRegistradas Reserva[]
+  asistenciasSesionRegistradas  SesionPersonal[] @relation("AsistenciaSesionRegistrada")
   rutinasCreadas        Rutina[]
   maquinasActualizadas  Maquina[]
 
@@ -409,7 +411,7 @@ model SesionPersonal {
   miembroId    String               @map("miembro_id") @db.Uuid
   miembro      Miembro              @relation(fields: [miembroId], references: [id])
   entrenadorId String               @map("entrenador_id") @db.Uuid
-  entrenador   User                 @relation(fields: [entrenadorId], references: [id])
+  entrenador   User                 @relation("SesionDelEntrenador", fields: [entrenadorId], references: [id])
   inicio       DateTime
   fin          DateTime
   precio       Decimal              @db.Decimal(10, 2)
@@ -417,6 +419,10 @@ model SesionPersonal {
   cobro        Cobro?               @relation(fields: [cobroId], references: [id], onDelete: Restrict)
   estado       EstadoSesion         @default(AGENDADA)
   asistencia   AsistenciaSesion     @default(SIN_REGISTRAR)
+  /// Quién y cuándo registró la asistencia (H19), igual que en la reserva.
+  asistenciaRegistradaPorId String?   @map("asistencia_registrada_por") @db.Uuid
+  asistenciaRegistradaPor   User?     @relation("AsistenciaSesionRegistrada", fields: [asistenciaRegistradaPorId], references: [id])
+  asistenciaRegistradaEn    DateTime? @map("asistencia_registrada_en")
   creadaEn     DateTime             @default(now()) @map("creada_en")
 
   @@index([miembroId, inicio])
@@ -679,6 +685,11 @@ model Reserva {
   membresia   Membresia         @relation(fields: [membresiaId], references: [id])
   estado      EstadoReserva     @default(CONFIRMADA)
   asistencia  AsistenciaReserva @default(SIN_REGISTRAR)
+  /// Quién y cuándo registró la asistencia (H19). Van juntos con `asistencia`:
+  /// o los tres sin registrar, o los tres puestos (CHECK en la migración).
+  asistenciaRegistradaPorId String?   @map("asistencia_registrada_por") @db.Uuid
+  asistenciaRegistradaPor   User?     @relation(fields: [asistenciaRegistradaPorId], references: [id])
+  asistenciaRegistradaEn    DateTime? @map("asistencia_registrada_en")
   creadaEn    DateTime          @default(now()) @map("creada_en")
   canceladaEn DateTime?         @map("cancelada_en")
 

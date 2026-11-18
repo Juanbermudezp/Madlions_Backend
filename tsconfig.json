@@ -70,6 +70,8 @@
       "@Sesiones/*": ["./src/sesiones/*/index.ts"],
       "@Reservas": ["./src/reservas/index.ts"],
       "@Reservas/*": ["./src/reservas/*/index.ts"],
+      "@Asistencia": ["./src/asistencia/index.ts"],
+      "@Asistencia/*": ["./src/asistencia/*/index.ts"],
       "@Maquinas": ["./src/maquinas/index.ts"],
       "@Maquinas/*": ["./src/maquinas/*/index.ts"],
     }
