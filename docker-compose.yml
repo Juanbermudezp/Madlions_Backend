@@ -49,7 +49,7 @@ services:
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-7}
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
     ports:
-      - '${PORT:-3000}:3000'
+      - '${PORT:-8000}:3000'
     # Aplica las migraciones pendientes antes de levantar el servidor.
     command: sh -c "npx prisma migrate deploy && node dist/main.js"
 

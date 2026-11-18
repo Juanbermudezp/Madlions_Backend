@@ -66,6 +66,8 @@
       "@Cobros/*": ["./src/cobros/*/index.ts"],
       "@Reservas": ["./src/reservas/index.ts"],
       "@Reservas/*": ["./src/reservas/*/index.ts"],
+      "@Maquinas": ["./src/maquinas/index.ts"],
+      "@Maquinas/*": ["./src/maquinas/*/index.ts"],
     }
   }
 }
