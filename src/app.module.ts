@@ -15,6 +15,7 @@ import { ConfiguracionModule } from '@Configuracion';
 import { MiembrosModule } from '@Miembros';
 import { MembresiasModule } from '@Membresias';
 import { CobrosModule } from '@Cobros';
+import { ReservasModule } from '@Reservas';
 import { MaquinasModule } from '@Maquinas';
 
 @Module({
@@ -36,6 +37,7 @@ import { MaquinasModule } from '@Maquinas';
     MiembrosModule,
     MembresiasModule,
     CobrosModule,
+    ReservasModule,
     MaquinasModule,
   ],
   providers: [
