@@ -12,9 +12,12 @@ import { BloquesModule } from '@Bloques';
 import { ClasesModule } from '@Clases';
 import { PlanesModule } from '@Planes';
 import { ConfiguracionModule } from '@Configuracion';
+import { EntrenadoresModule } from '@Entrenadores';
 import { MiembrosModule } from '@Miembros';
 import { MembresiasModule } from '@Membresias';
 import { CobrosModule } from '@Cobros';
+import { CobrosModule } from '@Cobros';
+import { SesionesModule } from '@Sesiones';
 import { RutinasModule } from './rutinas/index.js';
 import { ReservasModule } from '@Reservas';
 import { MaquinasModule } from '@Maquinas';
@@ -35,9 +38,11 @@ import { MaquinasModule } from '@Maquinas';
     ProgresoModule,
     PlanesModule,
     ConfiguracionModule,
+    EntrenadoresModule,
     MiembrosModule,
     MembresiasModule,
-    CobrosModule,
+     CobrosModule,
+    SesionesModule,
     RutinasModule,
     ReservasModule,
     MaquinasModule,
