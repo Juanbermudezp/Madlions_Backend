@@ -16,13 +16,14 @@ const ADMIN = '99999999-9999-4999-8999-999999999999';
 
 /** Nest, controladores, servicios, repositorios, pipes y guards reales.
  * Prisma, verificación de JWT y carga de usuario simulados; no usa PostgreSQL.
- * PrismaService se sustituye antes de init(): no hay conexión ni escrituras.
+ * PrismaService se sustituye antes de init(): no hay conexión ni escrituras SQL.
  */
 describe('BE-15.1 contrato HTTP y autorización de rutinas propias', () => {
   let app: INestApplication;
   const prisma = {
     miembro: { findUnique: vi.fn() },
-    rutina: { findMany: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn() },
+    rutina: { findMany: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
+    rutinaDia: { deleteMany: vi.fn() }, $transaction: vi.fn(),
   };
   const cuentas = new Map([
     [USUARIO_A, Rol.MIEMBRO], [USUARIO_B, Rol.MIEMBRO],
@@ -101,6 +102,63 @@ describe('BE-15.1 contrato HTTP y autorización de rutinas propias', () => {
     expect(actual.body.dias).toEqual(actualizada.dias);
     expect(prisma.rutina.findFirst).toHaveBeenCalledTimes(2);
     expect(prisma.rutina.findUnique).toHaveBeenCalledTimes(2);
+  });
+  it('QA-H15-03: GET miembro -> PUT H14 entrenador -> GET miembro usa el reemplazo completo, con almacenamiento simulado', async () => {
+    // Estado solo en memoria. Comprueba composición HTTP y coordinación real de
+    // H14/H15; no demuestra commit, cascadas ni aislamiento de PostgreSQL.
+    let guardado: RutinaCompleta = {
+      id: RUTINA_A, nombre: detalle.nombre, objetivo: detalle.objetivo, fechaInicio: detalle.fechaInicio,
+      miembroId: MIEMBRO_A, entrenadorId: ENTRENADOR,
+      creadoEn: new Date('2026-11-17T12:00:00Z'), actualizadoEn: new Date('2026-11-17T12:00:00Z'),
+      miembro: { id: MIEMBRO_A, codigoMiembro: 'MBR-999001', usuario: { nombre: 'Miembro', apellido: 'QA' } },
+      dias: detalle.dias.map((d) => ({ ...d, rutinaId: RUTINA_A, ejercicios: d.ejercicios.map((e) => ({ ...e, diaId: d.id })) })),
+    };
+    prisma.rutina.findUnique.mockImplementation(async ({ where, select }: { where: { id: string }; select?: { miembroId: boolean } }) =>
+      where.id !== guardado.id ? null : select ? { miembroId: guardado.miembroId } : guardado);
+    prisma.rutina.findFirst.mockImplementation(async ({ where }: { where: { id: string; miembroId: string } }) =>
+      where.id === guardado.id && where.miembroId === guardado.miembroId ? { ...guardado, entrenador: resumenReciente.entrenador } : null);
+    prisma.rutina.findMany.mockImplementation(async ({ where }: { where: { miembroId: string } }) =>
+      where.miembroId === guardado.miembroId ? [{ ...guardado, entrenador: resumenReciente.entrenador }] : []);
+    prisma.$transaction.mockImplementation((operar: (tx: typeof prisma) => Promise<unknown>) => operar(prisma));
+    prisma.rutinaDia.deleteMany.mockImplementation(async () => {
+      const count = guardado.dias.length;
+      guardado = { ...guardado, dias: [] };
+      return { count };
+    });
+    type EjercicioNuevo = { orden: number; nombre: string; series: number; repeticiones: number; descansoSeg: number };
+    type DiaNuevo = { orden: number; nombre: string; ejercicios: { create: EjercicioNuevo[] } };
+    prisma.rutina.update.mockImplementation(async ({ data }: { data: {
+      nombre?: string; objetivo?: string; fechaInicio?: Date; dias?: { create: DiaNuevo[] };
+    } }) => {
+      guardado = { ...guardado, nombre: data.nombre ?? guardado.nombre, objetivo: data.objetivo ?? guardado.objetivo,
+        fechaInicio: data.fechaInicio ?? guardado.fechaInicio };
+      if (data.dias) guardado.dias = data.dias.create.map((d) => ({ id: `nuevo-dia-${d.orden}`, rutinaId: RUTINA_A,
+        orden: d.orden, nombre: d.nombre, ejercicios: d.ejercicios.create.map((e) => ({
+          ...e, id: `nuevo-ej-${d.orden}-${e.orden}`, diaId: `nuevo-dia-${d.orden}`,
+        })),
+      }));
+      return guardado;
+    });
+
+    const inicial = await api().get(`/api/v1/rutinas/${RUTINA_A}`).auth(USUARIO_A, { type: 'bearer' }).expect(200);
+    expect(inicial.body.dias).toEqual(detalle.dias);
+    const cambios = { nombre: 'QA H15 fuerza revisada', objetivo: 'Comprobar reemplazo visible', fechaInicio: '2099-11-18', dias: [
+      { nombre: 'Posterior', ejercicios: [{ nombre: 'Peso muerto', series: 5, repeticiones: 6, descansoSeg: 180 }] },
+    ] };
+    const edicion = await api().put(`/api/v1/rutinas/${RUTINA_A}`).auth(ENTRENADOR, { type: 'bearer' }).send(cambios).expect(200);
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(prisma.rutina.update).toHaveBeenCalledTimes(2);
+    expect(prisma.rutinaDia.deleteMany).toHaveBeenCalledWith({ where: { rutinaId: RUTINA_A, rutina: { entrenadorId: ENTRENADOR } } });
+    const actual = await api().get(`/api/v1/rutinas/${RUTINA_A}`).auth(USUARIO_A, { type: 'bearer' }).expect(200);
+    expect(actual.body).toMatchObject({ nombre: cambios.nombre, objetivo: cambios.objetivo, fechaInicio: cambios.fechaInicio,
+      entrenador: resumenReciente.entrenador, dias: [{ orden: 1, nombre: 'Posterior', ejercicios: [{ orden: 1, ...cambios.dias[0]!.ejercicios[0] }] }] });
+    expect(actual.body.dias).toHaveLength(1);
+    expect(actual.body.dias).toEqual(edicion.body.dias);
+    expect(JSON.stringify(actual.body)).not.toContain('Press banca');
+    expect(JSON.stringify(actual.body)).not.toContain('Sentadilla');
+    const lista = await api().get('/api/v1/rutinas/mias').auth(USUARIO_A, { type: 'bearer' }).expect(200);
+    expect(lista.body).toEqual([{ id: RUTINA_A, nombre: cambios.nombre, objetivo: cambios.objetivo,
+      fechaInicio: cambios.fechaInicio, entrenador: resumenReciente.entrenador }]);
   });
   it('propietario B recibe su detalle; A recibe 403 antes de leerlo', async () => {
     prisma.rutina.findUnique.mockResolvedValue({ miembroId: MIEMBRO_B });
