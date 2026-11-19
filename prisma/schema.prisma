@@ -116,6 +116,8 @@ model User {
   bloquesDisponibilidad BloqueDisponibilidad[]
   clases                Clase[]
   membresiasRegistradas Membresia[]
+  accesosRegistrados    RegistroAcceso[] @relation("AccesoRegistradoPor")
+  salidasRegistradas    RegistroAcceso[] @relation("AccesoSalidaRegistradaPor")
   sesionesPersonales    SesionPersonal[] @relation("SesionDelEntrenador")
   asistenciasReservaRegistradas Reserva[]
   asistenciasSesionRegistradas  SesionPersonal[] @relation("AsistenciaSesionRegistrada")
@@ -142,6 +144,7 @@ model Miembro {
   avisos Aviso[]
   membresias Membresia[]
   cobros Cobro[]
+  registrosAcceso RegistroAcceso[]
   sesionesPersonales SesionPersonal[]
   reservas Reserva[]
 
@@ -623,6 +626,15 @@ enum ResultadoPago {
   @@map("resultado_pago")
 }
 
+/// Estado de un registro de acceso (H10): DENTRO, SALIO o CERRADO_AUTO (23:59, UTC-6).
+enum EstadoAcceso {
+  DENTRO
+  SALIO
+  CERRADO_AUTO
+
+  @@map("estado_acceso")
+}
+
 /// Intento de pago de un cobro en la pasarela simulada (H12).
 ///
 /// Nunca guarda el número completo de la tarjeta ni el código de seguridad:
@@ -697,4 +709,32 @@ model Reserva {
   @@index([miembroId, estado])
   @@index([membresiaId, estado])
   @@map("reserva")
+}
+
+/// Ingreso y salida de un miembro del gimnasio (H10).
+///
+/// - `estadoMembresia` guarda el estado de la membresía al ingresar (H11).
+/// - `motivoExcepcion` lo exige H11 cuando el miembro no tiene la membresía al día.
+/// - Un miembro solo puede tener un registro DENTRO a la vez: lo garantiza el
+///   índice único parcial `registro_acceso_miembro_dentro_key` de la migración
+///   (Prisma no puede declararlo aquí).
+/// - Los CHECK de coherencia entre estado, salida y usuario también viven en
+///   la migración.
+model RegistroAcceso {
+  id                    String       @id @default(uuid()) @db.Uuid
+  miembroId             String       @map("miembro_id") @db.Uuid
+  miembro               Miembro      @relation(fields: [miembroId], references: [id], onDelete: Restrict)
+  ingresoEn             DateTime     @default(now()) @map("ingreso_en")
+  salidaEn              DateTime?    @map("salida_en")
+  estado                EstadoAcceso @default(DENTRO)
+  registradoPorId       String       @map("registrado_por") @db.Uuid
+  registradoPor         User         @relation("AccesoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  salidaRegistradaPorId String?      @map("salida_registrada_por") @db.Uuid
+  salidaRegistradaPor   User?        @relation("AccesoSalidaRegistradaPor", fields: [salidaRegistradaPorId], references: [id], onDelete: Restrict)
+  estadoMembresia       String       @map("estado_membresia") @db.VarChar(30)
+  motivoExcepcion       String?      @map("motivo_excepcion") @db.VarChar(250)
+
+  @@index([miembroId, estado])
+  @@index([ingresoEn])
+  @@map("registro_acceso")
 }
