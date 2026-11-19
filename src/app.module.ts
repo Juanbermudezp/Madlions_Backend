@@ -12,12 +12,17 @@ import { BloquesModule } from '@Bloques';
 import { ClasesModule } from '@Clases';
 import { PlanesModule } from '@Planes';
 import { ConfiguracionModule } from '@Configuracion';
+import { EntrenadoresModule } from '@Entrenadores';
 import { MiembrosModule } from '@Miembros';
 import { MembresiasModule } from '@Membresias';
 import { CobrosModule } from '@Cobros';
+import { SesionesModule } from '@Sesiones';
+import { AccesosModule } from '@Accesos';
+import { ScheduleModule } from '@nestjs/schedule';
 import { RutinasModule } from './rutinas/index.js';
 import { ReservasModule } from '@Reservas';
 import { MaquinasModule } from '@Maquinas';
+import { AsistenciaModule } from '@Asistencia';
 
 @Module({
   imports: [
@@ -35,12 +40,17 @@ import { MaquinasModule } from '@Maquinas';
     ProgresoModule,
     PlanesModule,
     ConfiguracionModule,
+    EntrenadoresModule,
     MiembrosModule,
     MembresiasModule,
     CobrosModule,
+    SesionesModule,
+    AccesosModule,
+    ScheduleModule.forRoot(),
     RutinasModule,
     ReservasModule,
     MaquinasModule,
+    AsistenciaModule,
   ],
   providers: [
     {

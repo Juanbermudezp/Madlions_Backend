@@ -72,7 +72,7 @@ describe('calcularEstadoMembresia', () => {
 
         it('un Daypass de hoy es PROXIMA_A_VENCER con 0 días', () => {
             expect(estado([pagada('d1', HOY, HOY, { tipoPlan: TipoPlan.DAYPASS, nombrePlan: 'Daypass' })]))
-                .toMatchObject({ estado: 'PROXIMA_A_VENCER', diasRestantes: 0, tipoPlan: 'DAYPASS' });
+                .toMatchObject({ estado: 'VIGENTE', diasRestantes: 0, tipoPlan: 'DAYPASS' });
         });
     });
 

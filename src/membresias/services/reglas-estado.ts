@@ -161,8 +161,10 @@ export function calcularEstadoMembresia(
 
     if (vigente) {
         const diasRestantes = diasEntre(fecha, vigente.vencimiento);
+        // El Daypass dura un solo día: ese día está Vigente, no "Próxima a vencer" (H11).
+        const esDaypass = vigente.membresia.tipoPlan === TipoPlan.DAYPASS;
         return detalle(
-            diasRestantes <= DIAS_PROXIMA_A_VENCER ? 'PROXIMA_A_VENCER' : 'VIGENTE',
+            !esDaypass && diasRestantes <= DIAS_PROXIMA_A_VENCER ? 'PROXIMA_A_VENCER' : 'VIGENTE',
             vigente.membresia,
             vigente,
             diasRestantes,

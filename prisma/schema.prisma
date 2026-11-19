@@ -116,7 +116,12 @@ model User {
   bloquesDisponibilidad BloqueDisponibilidad[]
   clases                Clase[]
   membresiasRegistradas Membresia[]
-  rutinasCreadas         Rutina[]
+  accesosRegistrados    RegistroAcceso[] @relation("AccesoRegistradoPor")
+  salidasRegistradas    RegistroAcceso[] @relation("AccesoSalidaRegistradaPor")
+  sesionesPersonales    SesionPersonal[] @relation("SesionDelEntrenador")
+  asistenciasReservaRegistradas Reserva[]
+  asistenciasSesionRegistradas  SesionPersonal[] @relation("AsistenciaSesionRegistrada")
+  rutinasCreadas        Rutina[]
   maquinasActualizadas  Maquina[]
   cambiosDeEstadoMaquina HistorialMaquina[]
 
@@ -140,6 +145,8 @@ model Miembro {
   avisos Aviso[]
   membresias Membresia[]
   cobros Cobro[]
+  registrosAcceso RegistroAcceso[]
+  sesionesPersonales SesionPersonal[]
   reservas Reserva[]
 
   rutinas Rutina[]
@@ -228,6 +235,7 @@ model BloqueDisponibilidad {
   duracionMin  Int          @map("duracion_min")
   estado       EstadoBloque @default(DISPONIBLE)
   creadoEn     DateTime     @default(now()) @map("creado_en")
+  sesion       SesionPersonal?
 
   @@index([entrenadorId, inicio])
   @@map("bloque_disponibilidad")
@@ -384,6 +392,46 @@ model Configuracion {
   actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
 
   @@map("configuracion")
+}
+
+enum EstadoSesion {
+  AGENDADA
+
+  @@map("estado_sesion")
+}
+
+enum AsistenciaSesion {
+  SIN_REGISTRAR
+  ASISTIO
+  NO_ASISTIO
+
+  @@map("asistencia_sesion")
+}
+
+model SesionPersonal {
+  id           String               @id @default(uuid()) @db.Uuid
+  bloqueId     String               @unique @map("bloque_id") @db.Uuid
+  bloque       BloqueDisponibilidad @relation(fields: [bloqueId], references: [id])
+  miembroId    String               @map("miembro_id") @db.Uuid
+  miembro      Miembro              @relation(fields: [miembroId], references: [id])
+  entrenadorId String               @map("entrenador_id") @db.Uuid
+  entrenador   User                 @relation("SesionDelEntrenador", fields: [entrenadorId], references: [id])
+  inicio       DateTime
+  fin          DateTime
+  precio       Decimal              @db.Decimal(10, 2)
+  cobroId      String?              @unique @map("cobro_id") @db.Uuid
+  cobro        Cobro?               @relation(fields: [cobroId], references: [id], onDelete: Restrict)
+  estado       EstadoSesion         @default(AGENDADA)
+  asistencia   AsistenciaSesion     @default(SIN_REGISTRAR)
+  /// Quién y cuándo registró la asistencia (H19), igual que en la reserva.
+  asistenciaRegistradaPorId String?   @map("asistencia_registrada_por") @db.Uuid
+  asistenciaRegistradaPor   User?     @relation("AsistenciaSesionRegistrada", fields: [asistenciaRegistradaPorId], references: [id])
+  asistenciaRegistradaEn    DateTime? @map("asistencia_registrada_en")
+  creadaEn     DateTime             @default(now()) @map("creada_en")
+
+  @@index([miembroId, inicio])
+  @@index([entrenadorId, inicio])
+  @@map("sesion_personal")
 }
 
 /// Tipo de máquina del inventario (H17).
@@ -564,6 +612,7 @@ model Cobro {
 
   intentos    IntentoPago[]
   comprobante Comprobante?
+  sesion      SesionPersonal?
 
   @@unique([referenciaTipo, referenciaId])
   @@index([miembroId, estado])
@@ -577,6 +626,15 @@ enum ResultadoPago {
   ERROR
 
   @@map("resultado_pago")
+}
+
+/// Estado de un registro de acceso (H10): DENTRO, SALIO o CERRADO_AUTO (23:59, UTC-6).
+enum EstadoAcceso {
+  DENTRO
+  SALIO
+  CERRADO_AUTO
+
+  @@map("estado_acceso")
 }
 
 /// Intento de pago de un cobro en la pasarela simulada (H12).
@@ -641,6 +699,11 @@ model Reserva {
   membresia   Membresia         @relation(fields: [membresiaId], references: [id])
   estado      EstadoReserva     @default(CONFIRMADA)
   asistencia  AsistenciaReserva @default(SIN_REGISTRAR)
+  /// Quién y cuándo registró la asistencia (H19). Van juntos con `asistencia`:
+  /// o los tres sin registrar, o los tres puestos (CHECK en la migración).
+  asistenciaRegistradaPorId String?   @map("asistencia_registrada_por") @db.Uuid
+  asistenciaRegistradaPor   User?     @relation(fields: [asistenciaRegistradaPorId], references: [id])
+  asistenciaRegistradaEn    DateTime? @map("asistencia_registrada_en")
   creadaEn    DateTime          @default(now()) @map("creada_en")
   canceladaEn DateTime?         @map("cancelada_en")
 
@@ -650,6 +713,33 @@ model Reserva {
   @@map("reserva")
 }
 
+/// Ingreso y salida de un miembro del gimnasio (H10).
+///
+/// - `estadoMembresia` guarda el estado de la membresía al ingresar (H11).
+/// - `motivoExcepcion` lo exige H11 cuando el miembro no tiene la membresía al día.
+/// - Un miembro solo puede tener un registro DENTRO a la vez: lo garantiza el
+///   índice único parcial `registro_acceso_miembro_dentro_key` de la migración
+///   (Prisma no puede declararlo aquí).
+/// - Los CHECK de coherencia entre estado, salida y usuario también viven en
+///   la migración.
+model RegistroAcceso {
+  id                    String       @id @default(uuid()) @db.Uuid
+  miembroId             String       @map("miembro_id") @db.Uuid
+  miembro               Miembro      @relation(fields: [miembroId], references: [id], onDelete: Restrict)
+  ingresoEn             DateTime     @default(now()) @map("ingreso_en")
+  salidaEn              DateTime?    @map("salida_en")
+  estado                EstadoAcceso @default(DENTRO)
+  registradoPorId       String       @map("registrado_por") @db.Uuid
+  registradoPor         User         @relation("AccesoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  salidaRegistradaPorId String?      @map("salida_registrada_por") @db.Uuid
+  salidaRegistradaPor   User?        @relation("AccesoSalidaRegistradaPor", fields: [salidaRegistradaPorId], references: [id], onDelete: Restrict)
+  estadoMembresia       String       @map("estado_membresia") @db.VarChar(30)
+  motivoExcepcion       String?      @map("motivo_excepcion") @db.VarChar(250)
+
+  @@index([miembroId, estado])
+  @@index([ingresoEn])
+  @@map("registro_acceso")
+}
 /// Cambio de estado de una máquina (H18). La máquina guarda solo el último
 /// cambio; acá está la historia completa, del más reciente al más antiguo.
 ///
