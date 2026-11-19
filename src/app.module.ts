@@ -21,6 +21,7 @@ import { AccesosModule } from '@Accesos';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RutinasModule } from './rutinas/index.js';
 import { ReservasModule } from '@Reservas';
+import { ResenasModule } from '@Resenas';
 import { MaquinasModule } from '@Maquinas';
 import { AsistenciaModule } from '@Asistencia';
 
@@ -49,6 +50,7 @@ import { AsistenciaModule } from '@Asistencia';
     ScheduleModule.forRoot(),
     RutinasModule,
     ReservasModule,
+    ResenasModule,
     MaquinasModule,
     AsistenciaModule,
   ],
