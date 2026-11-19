@@ -16,11 +16,11 @@ import { EntrenadoresModule } from '@Entrenadores';
 import { MiembrosModule } from '@Miembros';
 import { MembresiasModule } from '@Membresias';
 import { CobrosModule } from '@Cobros';
-import { CobrosModule } from '@Cobros';
 import { SesionesModule } from '@Sesiones';
 import { RutinasModule } from './rutinas/index.js';
 import { ReservasModule } from '@Reservas';
 import { MaquinasModule } from '@Maquinas';
+import { AsistenciaModule } from '@Asistencia';
 
 @Module({
   imports: [
@@ -46,6 +46,7 @@ import { MaquinasModule } from '@Maquinas';
     RutinasModule,
     ReservasModule,
     MaquinasModule,
+    AsistenciaModule,
   ],
   providers: [
     {
