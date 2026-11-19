@@ -10,16 +10,18 @@ import type {
 import { aFechaLocal, hoyLocal, sumarDias } from '@Common/fechas';
 import { EstadoMembresiaService } from '@Membresias/services';
 import { EstadoAcceso } from '@PrismaClient';
+import { motivoValido, requiereMotivo } from './reglas-acceso.js';
 
-/** Mensajes de H10. */
+/** Mensajes de H10 y H11. */
 export const MENSAJES_ACCESO = {
     YA_DENTRO: 'El miembro ya está dentro del gimnasio',
     SIN_INGRESO: 'El miembro no tiene un ingreso abierto',
+    MOTIVO_REQUERIDO: 'Se requiere un motivo de excepción',
     MIEMBRO_NO_EXISTE: 'El miembro no existe.',
     REGISTRO_NO_EXISTE: 'El registro de acceso no existe.',
 } as const;
 
-/** Registro de ingresos y salidas de los miembros (H10, BE-10.1). */
+/** Registro de ingresos y salidas de los miembros (H10) con la alerta de membresía (H11). */
 @Injectable()
 export class AccesosService {
     constructor(
@@ -29,8 +31,12 @@ export class AccesosService {
 
     /**
      * Registra el ingreso de un miembro con la fecha y hora actuales y el
-     * usuario de recepción del token. Guarda el estado de la membresía en ese
-     * momento (H11). `ahora` es un parámetro solo para las pruebas.
+     * usuario de recepción del token.
+     *
+     * El estado de la membresía se calcula aquí con BE-2.4, nunca se toma del
+     * cuerpo (H11). Si es VENCIDA, PENDIENTE_PAGO o SIN_MEMBRESIA, exige un
+     * motivo de excepción de 10 a 250 caracteres y lo guarda con el ingreso;
+     * en los demás estados el motivo se ignora. `ahora` es solo para las pruebas.
      */
     async registrarIngreso(
         recepcionId: string,
@@ -51,13 +57,18 @@ export class AccesosService {
             hoyLocal(ahora),
         );
 
+        const conExcepcion = requiereMotivo(estadoMembresia);
+        if (conExcepcion && !motivoValido(motivoExcepcion)) {
+            throw new ConflictException(MENSAJES_ACCESO.MOTIVO_REQUERIDO);
+        }
+
         try {
             const registro = await this.registroAccesoRepository.crearIngreso({
                 miembroId,
                 ingresoEn: ahora,
                 registradoPorId: recepcionId,
                 estadoMembresia,
-                motivoExcepcion: motivoExcepcion || null,
+                motivoExcepcion: conExcepcion ? motivoExcepcion!.trim() : null,
             });
             return {
                 id: registro.id,

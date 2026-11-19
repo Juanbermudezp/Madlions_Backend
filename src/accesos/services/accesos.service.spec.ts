@@ -137,4 +137,67 @@ describe('AccesosService', () => {
             { id: 'r1', miembro: { nombre: 'María López', codigo: 'MBR-000001' }, ingresoEn: AHORA, salidaEn: null, estado: EstadoAcceso.DENTRO },
         ]);
     });
+
+    describe('registrarIngreso según el estado de la membresía (H11)', () => {
+        const MOTIVO = 'Pagará mañana en recepción';
+
+        it.each(['VIGENTE', 'PROXIMA_A_VENCER', 'POR_INICIAR'])(
+            '%s: entra sin motivo y no se guarda motivo',
+            async (estado) => {
+                estadoMembresiaService.obtenerEstado.mockResolvedValue({ estado });
+
+                await expect(
+                    service.registrarIngreso('rec1', { miembroId: 'm1', motivoExcepcion: MOTIVO }, AHORA),
+                ).resolves.toMatchObject({ estadoMembresia: estado });
+                expect(repo.crearIngreso).toHaveBeenCalledWith(
+                    expect.objectContaining({ estadoMembresia: estado, motivoExcepcion: null }),
+                );
+            },
+        );
+
+        it.each(['VENCIDA', 'PENDIENTE_PAGO', 'SIN_MEMBRESIA'])(
+            '%s: sin motivo responde 409 y no registra',
+            async (estado) => {
+                estadoMembresiaService.obtenerEstado.mockResolvedValue({ estado });
+
+                await expect(service.registrarIngreso('rec1', { miembroId: 'm1' }, AHORA)).rejects.toThrow(
+                    new ConflictException(MENSAJES_ACCESO.MOTIVO_REQUERIDO),
+                );
+                expect(repo.crearIngreso).not.toHaveBeenCalled();
+            },
+        );
+
+        it.each(['VENCIDA', 'PENDIENTE_PAGO', 'SIN_MEMBRESIA'])(
+            '%s: con un motivo de 9 caracteres (sin contar espacios) responde 409',
+            async (estado) => {
+                estadoMembresiaService.obtenerEstado.mockResolvedValue({ estado });
+
+                await expect(
+                    service.registrarIngreso('rec1', { miembroId: 'm1', motivoExcepcion: '  123456789  ' }, AHORA),
+                ).rejects.toThrow(new ConflictException(MENSAJES_ACCESO.MOTIVO_REQUERIDO));
+            },
+        );
+
+        it.each(['VENCIDA', 'PENDIENTE_PAGO', 'SIN_MEMBRESIA'])(
+            '%s: con motivo válido registra el ingreso y guarda el motivo con el usuario de recepción',
+            async (estado) => {
+                estadoMembresiaService.obtenerEstado.mockResolvedValue({ estado });
+
+                await service.registrarIngreso('rec1', { miembroId: 'm1', motivoExcepcion: `  ${MOTIVO}  ` }, AHORA);
+
+                expect(repo.crearIngreso).toHaveBeenCalledWith({
+                    miembroId: 'm1',
+                    ingresoEn: AHORA,
+                    registradoPorId: 'rec1',
+                    estadoMembresia: estado,
+                    motivoExcepcion: MOTIVO,
+                });
+            },
+        );
+
+        it('el estado se calcula en el servidor para el día del ingreso', async () => {
+            await service.registrarIngreso('rec1', { miembroId: 'm1' }, AHORA);
+            expect(estadoMembresiaService.obtenerEstado).toHaveBeenCalledWith('m1', '2026-11-16');
+        });
+    });
 });

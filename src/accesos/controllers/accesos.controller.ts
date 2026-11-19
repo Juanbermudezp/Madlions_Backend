@@ -48,8 +48,9 @@ export class AccesosController {
     @ApiCreatedResponse({ type: IngresoResponseDto })
     @ApiBadRequestResponse({ description: 'El miembro no es válido.' })
     @ApiNotFoundResponse({ description: 'El miembro no existe.' })
-    @ApiConflictResponse({ description: 'El miembro ya está dentro del gimnasio' })
-    registrarIngreso(
+    @ApiConflictResponse({
+        description: 'El miembro ya está dentro del gimnasio · Se requiere un motivo de excepción',
+    }) registrarIngreso(
         @CurrentUser() user: User,
         @Body() dto: RegistrarIngresoDto,
     ): Promise<IngresoResponseDto> {

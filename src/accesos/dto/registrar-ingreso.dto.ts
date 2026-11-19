@@ -10,7 +10,8 @@ export class RegistrarIngresoDto {
 
     @ApiPropertyOptional({
         maxLength: 250,
-        description: 'Motivo para dejar pasar a un miembro sin membresía vigente. La regla está en BE-11.1.',
+        description:
+            'Obligatorio (10 a 250 caracteres) si la membresía está Vencida, Pendiente de pago o el miembro no tiene membresía (H11). En los demás estados se ignora.',
     })
     @IsOptional()
     @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
