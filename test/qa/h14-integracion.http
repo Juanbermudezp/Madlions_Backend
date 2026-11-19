@@ -1,0 +1,81 @@
+# PLANTILLA NO EJECUTADA. Requiere base aislada y autorización previa.
+# Resolver variables en memoria del cliente HTTP. No guardar tokens aquí.
+# QA_H14_BASE_URL debe incluir /api/v1 y apuntar exclusivamente al entorno QA.
+# QA_H14_MIEMBRO_ID es UUID de ficha, no UUID de usuario.
+# Copiar el id del POST a QA_H14_RUTINA_ID en el cliente.
+
+### QA-H14-01: buscar por nombre de fixture (usuario A)
+GET {{QA_H14_BASE_URL}}/miembros/buscar?q=QA%20H14
+Authorization: Bearer {{QA_H14_TOKEN_A}}
+
+### QA-H14-01: buscar por código generado para la fixture
+GET {{QA_H14_BASE_URL}}/miembros/buscar?q={{QA_H14_CODIGO_MIEMBRO}}
+Authorization: Bearer {{QA_H14_TOKEN_A}}
+
+### QA-H14-01: crear tres días con dos ejercicios, esperar 201
+POST {{QA_H14_BASE_URL}}/rutinas
+Authorization: Bearer {{QA_H14_TOKEN_A}}
+Content-Type: application/json
+
+{
+  "miembroId": "{{QA_H14_MIEMBRO_ID}}",
+  "nombre": "QA H14 Fuerza RUN_ID",
+  "objetivo": "Verificar creación y asignación en un entorno aislado",
+  "fechaInicio": "2099-11-18",
+  "dias": [
+    { "nombre": "Empuje", "ejercicios": [
+      { "nombre": "Press banca", "series": 4, "repeticiones": 8, "descansoSeg": 120 },
+      { "nombre": "Press militar", "series": 3, "repeticiones": 10, "descansoSeg": 60 }
+    ] },
+    { "nombre": "Tracción", "ejercicios": [
+      { "nombre": "Remo", "series": 4, "repeticiones": 8, "descansoSeg": 120 },
+      { "nombre": "Jalón", "series": 3, "repeticiones": 10, "descansoSeg": 60 }
+    ] },
+    { "nombre": "Piernas", "ejercicios": [
+      { "nombre": "Sentadilla", "series": 4, "repeticiones": 8, "descansoSeg": 120 },
+      { "nombre": "Prensa", "series": 3, "repeticiones": 10, "descansoSeg": 60 }
+    ] }
+  ]
+}
+
+### Consultar rutina propia creada (A); comparar IDs y orden
+GET {{QA_H14_BASE_URL}}/rutinas/creadas-por-mi?miembroId={{QA_H14_MIEMBRO_ID}}
+Authorization: Bearer {{QA_H14_TOKEN_A}}
+
+### QA-H14-04: reemplazar distribución por un día/un ejercicio, esperar 200
+PUT {{QA_H14_BASE_URL}}/rutinas/{{QA_H14_RUTINA_ID}}
+Authorization: Bearer {{QA_H14_TOKEN_A}}
+Content-Type: application/json
+
+{
+  "nombre": "QA H14 Fuerza editada RUN_ID",
+  "objetivo": "Verificar reemplazo completo",
+  "fechaInicio": "2099-11-18",
+  "dias": [ { "nombre": "Nueva distribución", "ejercicios": [
+    { "nombre": "Peso muerto", "series": 5, "repeticiones": 5, "descansoSeg": 180 }
+  ] } ]
+}
+
+### QA-H14-06: B no debe editar la rutina de A, esperar 403
+PUT {{QA_H14_BASE_URL}}/rutinas/{{QA_H14_RUTINA_ID}}
+Authorization: Bearer {{QA_H14_TOKEN_B}}
+Content-Type: application/json
+
+{
+  "nombre": "Intento ajeno QA",
+  "objetivo": "No debe guardarse",
+  "fechaInicio": "2099-11-18",
+  "dias": [ { "nombre": "Día", "ejercicios": [
+    { "nombre": "Press", "series": 1, "repeticiones": 1, "descansoSeg": 0 }
+  ] } ]
+}
+
+### QA-H14-07: A autorizado, esperar 200 con series (o [] si no hay mediciones)
+GET {{QA_H14_BASE_URL}}/miembros/{{QA_H14_MIEMBRO_ID}}/progreso?tipo=PESO
+Authorization: Bearer {{QA_H14_TOKEN_A}}
+
+### QA-H14-07: B sin asignación, esperar 403
+GET {{QA_H14_BASE_URL}}/miembros/{{QA_H14_MIEMBRO_ID}}/progreso
+Authorization: Bearer {{QA_H14_TOKEN_B}}
+
+# No se incluyen solicitudes H15: los endpoints aún no están implementados.

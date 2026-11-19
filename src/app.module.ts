@@ -19,6 +19,10 @@ import { CobrosModule } from '@Cobros';
 import { SesionesModule } from '@Sesiones';
 import { AccesosModule } from '@Accesos';
 import { ScheduleModule } from '@nestjs/schedule';
+import { RutinasModule } from './rutinas/index.js';
+import { ReservasModule } from '@Reservas';
+import { MaquinasModule } from '@Maquinas';
+import { AsistenciaModule } from '@Asistencia';
 
 @Module({
   imports: [
@@ -43,6 +47,10 @@ import { ScheduleModule } from '@nestjs/schedule';
     SesionesModule,
     AccesosModule,
     ScheduleModule.forRoot(),
+    RutinasModule,
+    ReservasModule,
+    MaquinasModule,
+    AsistenciaModule,
   ],
   providers: [
     {

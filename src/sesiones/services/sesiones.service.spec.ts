@@ -40,6 +40,7 @@ describe('SesionesService.agendar', () => {
         hayTraslape: vi.fn(),
         crear: vi.fn(),
         findDeUsuario: vi.fn(),
+        hayTraslapeConReserva: vi.fn(),
     };
     const bloqueRepository = { findConEntrenador: vi.fn(), ocuparSiDisponible: vi.fn() };
     const estadoMembresiaService = { obtenerEstado: vi.fn() };
@@ -63,6 +64,7 @@ describe('SesionesService.agendar', () => {
         sesionRepository.findMiembroIdDeUsuario.mockResolvedValue('m1');
         sesionRepository.contarPendientes.mockResolvedValue(0);
         sesionRepository.hayTraslape.mockResolvedValue(false);
+        sesionRepository.hayTraslapeConReserva.mockResolvedValue(false);
         sesionRepository.crear.mockImplementation((datos: DatosSesion) =>
             Promise.resolve({ ...datos, precio: { toFixed: () => '10.00' } }),
         );
@@ -152,6 +154,12 @@ describe('SesionesService.agendar', () => {
     it('responde 409 si se traslapa con otra sesión', async () => {
         sesionRepository.hayTraslape.mockResolvedValue(true);
         await expect(service.agendar('u1', 'b1', AHORA)).rejects.toThrow(rechazo(MENSAJES_AGENDA.TRASLAPE_SESION));
+    });
+
+    it('responde 409 si se traslapa con una clase reservada', async () => {
+        sesionRepository.hayTraslapeConReserva.mockResolvedValue(true);
+        await expect(service.agendar('u1', 'b1', AHORA)).rejects.toThrow(rechazo(MENSAJES_AGENDA.TRASLAPE_CLASE));
+        expect(cobrosService.crearCobro).not.toHaveBeenCalled();
     });
 
     it('si falla el cobro no se crea la sesión y el error sale de la transacción', async () => {

@@ -64,12 +64,18 @@
       "@Membresias/*": ["./src/membresias/*/index.ts"],
       "@Miembros": ["./src/miembros/index.ts"],
       "@Miembros/*": ["./src/miembros/*/index.ts"],
-      "@Cobros": ["./src/cobros/index.ts"],
+       "@Cobros": ["./src/cobros/index.ts"],
       "@Cobros/*": ["./src/cobros/*/index.ts"],
-      "@Sesiones": ["./src/sesiones/index.ts"],
+       "@Sesiones": ["./src/sesiones/index.ts"],
       "@Sesiones/*": ["./src/sesiones/*/index.ts"],
       "@Accesos": ["./src/accesos/index.ts"],
       "@Accesos/*": ["./src/accesos/*/index.ts"],
+      "@Reservas": ["./src/reservas/index.ts"],
+      "@Reservas/*": ["./src/reservas/*/index.ts"],
+      "@Asistencia": ["./src/asistencia/index.ts"],
+      "@Asistencia/*": ["./src/asistencia/*/index.ts"],
+      "@Maquinas": ["./src/maquinas/index.ts"],
+      "@Maquinas/*": ["./src/maquinas/*/index.ts"],
     }
   }
 }

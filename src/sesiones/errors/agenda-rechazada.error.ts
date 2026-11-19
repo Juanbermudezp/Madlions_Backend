@@ -5,6 +5,7 @@ export const MENSAJES_AGENDA = {
     MEMBRESIA: 'Necesitas una membresía vigente para agendar',
     LIMITE: 'Ya tienes 5 sesiones agendadas que no han empezado',
     TRASLAPE_SESION: 'Ya tienes otra sesión agendada en ese horario',
+    TRASLAPE_CLASE: 'Ya tienes una clase reservada en ese horario',
 } as const;
 
 /**

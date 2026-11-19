@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
 import { AgendaRechazadaError, MENSAJES_AGENDA } from '@Sesiones/errors';
 import {
+    EstadoClase,
+    EstadoReserva,
     EstadoSesion,
     Prisma,
     type EstadoCobro,
@@ -83,6 +85,22 @@ export class SesionRepository {
                 estado: EstadoSesion.AGENDADA,
                 inicio: { lt: fin },
                 fin: { gt: inicio },
+            },
+        });
+        return cantidad > 0;
+    }
+
+    async hayTraslapeConReserva(
+        miembroId: string,
+        inicio: Date,
+        fin: Date,
+        tx: Prisma.TransactionClient,
+    ): Promise<boolean> {
+        const cantidad = await tx.reserva.count({
+            where: {
+                miembroId,
+                estado: EstadoReserva.CONFIRMADA,
+                clase: { estado: EstadoClase.PROGRAMADA, inicio: { lt: fin }, fin: { gt: inicio } },
             },
         });
         return cantidad > 0;
