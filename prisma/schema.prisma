@@ -124,6 +124,7 @@ model User {
   resenasRecibidas      Resena[]
   rutinasCreadas        Rutina[]
   maquinasActualizadas  Maquina[]
+  cambiosDeEstadoMaquina HistorialMaquina[]
 
   @@map("usuario")
 }
@@ -492,6 +493,7 @@ model Maquina {
   ultimoCambioPorId    String?       @map("ultimo_cambio_por") @db.Uuid
   ultimoCambioPor      User?         @relation(fields: [ultimoCambioPorId], references: [id], onDelete: SetNull)
   actualizadoEn        DateTime      @default(now()) @updatedAt @map("actualizado_en")
+  historial            HistorialMaquina[]
 
   @@map("maquina")
 }
@@ -745,6 +747,27 @@ model RegistroAcceso {
   @@index([ingresoEn])
   @@map("registro_acceso")
 }
+/// Cambio de estado de una máquina (H18). La máquina guarda solo el último
+/// cambio; acá está la historia completa, del más reciente al más antiguo.
+///
+/// Viven como CHECK en la migración: el estado nuevo distinto del anterior, el
+/// largo del motivo y que un retorno a OPERATIVA no lleve fecha estimada.
+model HistorialMaquina {
+  id                   String        @id @default(uuid()) @db.Uuid
+  maquinaId            String        @map("maquina_id") @db.Uuid
+  maquina              Maquina       @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+  estadoAnterior       EstadoMaquina @map("estado_anterior")
+  estadoNuevo          EstadoMaquina @map("estado_nuevo")
+  motivo               String        @db.VarChar(250)
+  fechaEstimadaRetorno DateTime?     @map("fecha_estimada_retorno") @db.Date
+  cambiadoPorId        String        @map("cambiado_por") @db.Uuid
+  cambiadoPor          User          @relation(fields: [cambiadoPorId], references: [id])
+  cambiadoEn           DateTime      @default(now()) @map("cambiado_en")
+
+  @@index([maquinaId, cambiadoEn])
+  @@map("historial_maquina")
+}
+
 /// Reseña de una clase o de una sesión personal (H20).
 ///
 /// Apunta a la reserva o a la sesión, nunca a las dos, y hay a lo sumo una por

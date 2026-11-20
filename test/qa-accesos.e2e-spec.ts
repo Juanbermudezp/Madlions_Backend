@@ -25,6 +25,8 @@ const MENSAJES = {
     denegado: 'Acceso denegado',
 };
 
+const MOTIVO_EXCEPCION = 'Prueba QA-10.1 sin membresía';
+
 interface MiembroPrueba {
     id: string;
     codigo: string;
@@ -48,7 +50,10 @@ describe('QA-10.1 · Registro de ingreso y salida (H10)', () => {
 
     const http = () => request(app.getHttpServer());
     const ingreso = (token: string, miembroId: string) =>
-        http().post('/api/v1/accesos/ingreso').set('Authorization', `Bearer ${token}`).send({ miembroId });
+        http()
+            .post('/api/v1/accesos/ingreso')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ miembroId, motivoExcepcion: MOTIVO_EXCEPCION });
     const salida = (token: string, registroId: string) =>
         http().post(`/api/v1/accesos/${registroId}/salida`).set('Authorization', `Bearer ${token}`);
     const listaHoy = (token: string) =>
