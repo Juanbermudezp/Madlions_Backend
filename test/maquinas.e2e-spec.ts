@@ -386,15 +386,17 @@ describe('QA-17.1 · Consulta del estado de las máquinas (H17)', () => {
       });
     });
 
-    it('QA-23 · en H17 ningún rol puede modificar el estado: el endpoint no existe todavía', async () => {
+    // Desde H18 el endpoint existe: a quien consulta sin poder cambiar el
+    // estado lo frena el rol, no la falta de ruta.
+    it('QA-23 · el miembro y recepción no pueden modificar el estado', async () => {
       const maquina = await prisma.maquina.findUniqueOrThrow({ where: { codigo: 'MAQ-801' } });
 
-      for (const rol of TODOS_LOS_ROLES) {
+      for (const rol of SIN_DATOS_INTERNOS) {
         const res = await http()
           .post(`/api/v1/maquinas/${maquina.id}/estado`)
           .set(como(rol))
           .send({ estado: 'OPERATIVA', motivo: 'Intento de cambio desde QA-17.1.' });
-        expect(res.status, `el rol ${rol} recibió ${res.status}`).toBe(404);
+        expect(res.status, `el rol ${rol} recibió ${res.status}`).toBe(403);
       }
 
       const despues = await prisma.maquina.findUniqueOrThrow({ where: { codigo: 'MAQ-801' } });
