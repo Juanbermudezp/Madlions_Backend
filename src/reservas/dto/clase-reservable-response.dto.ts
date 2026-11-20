@@ -19,6 +19,9 @@ export class ClaseReservableResponseDto {
     @ApiProperty({ type: String, format: 'date-time' })
     fin!: Date;
 
+    @ApiProperty({ example: 20, description: 'Cupo máximo de la clase (1 a 50).' })
+    cupoMaximo!: number;
+
     @ApiProperty({ example: 12, description: 'Cupo máximo − reservas confirmadas. 0 = clase llena.' })
     lugaresDisponibles!: number;
 
@@ -39,6 +42,7 @@ export class ClaseReservableResponseDto {
             },
             inicio: clase.inicio,
             fin: clase.fin,
+            cupoMaximo: clase.cupoMaximo,
             lugaresDisponibles: Math.max(clase.cupoMaximo - reservasConfirmadas, 0),
             yaReservada,
         };

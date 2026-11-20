@@ -171,6 +171,7 @@ describe('QA-5.1 · Reserva de un cupo (H5)', () => {
                 entrenador: { id: entrenadorId, nombre: expect.any(String) },
                 inicio: temprano.inicio.toISOString(),
                 fin: temprano.fin.toISOString(),
+                cupoMaximo: 10,
                 lugaresDisponibles: 10,
                 yaReservada: false,
             });
