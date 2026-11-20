@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import {
     ApiBadRequestResponse,
     ApiBearerAuth,
@@ -16,12 +16,13 @@ import {
     CrearReservaDto,
     MiReservaResponseDto,
     MisReservasQueryDto,
+    ReservaCanceladaResponseDto,
     ReservaCreadaResponseDto,
 } from '@Reservas/dto';
 import { ReservasService } from '@Reservas/services';
 import { Rol, type User } from '@PrismaClient';
 
-/** Reservas de clases grupales (H5). Solo para el rol MIEMBRO. */
+/** Reservas de clases grupales (H5) y su cancelación (H6). Solo para el rol MIEMBRO. */
 @ApiTags('reservas')
 @ApiBearerAuth()
 @Controller('reservas')
@@ -65,5 +66,26 @@ export class ReservasController {
         @Body() dto: CrearReservaDto,
     ): Promise<ReservaCreadaResponseDto> {
         return this.reservasService.reservar(user.id, dto.claseId);
+    }
+
+    /** BE-6.1 · Sin cuerpo: la reserva sale de la URL y el dueño se compara con el token. */
+    @Post(':id/cancelar')
+    @HttpCode(HttpStatus.OK)
+    @Roles(Rol.MIEMBRO)
+    @ApiOperation({ summary: 'Cancelar una reserva propia hasta 2 horas antes del inicio de la clase' })
+    @ApiOkResponse({ type: ReservaCanceladaResponseDto })
+    @ApiBadRequestResponse({ description: 'El id no es un UUID.' })
+    @ApiNotFoundResponse({ description: 'La reserva no existe.' })
+    @ApiConflictResponse({
+        description:
+            'Esta reserva ya fue cancelada · Solo puedes cancelar hasta 2 horas antes del inicio de la clase',
+    })
+    @ApiUnauthorizedResponse({ description: 'Sin sesión.' })
+    @ApiForbiddenResponse({ description: 'La reserva es de otro miembro, o el usuario no es miembro.' })
+    cancelar(
+        @Param('id', ParseUUIDPipe) id: string,
+        @CurrentUser() user: User,
+    ): Promise<ReservaCanceladaResponseDto> {
+        return this.reservasService.cancelar(user.id, id);
     }
 }

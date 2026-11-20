@@ -1,11 +1,11 @@
-import { BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
 import type { AvisosService } from '@Avisos/services';
 import type { EstadoMembresiaService } from '@Membresias/services';
 import type { ClaseConRelaciones, ClaseRepository } from '@Clases/repositories';
 import type { ClaseBloqueada, ReservaConClase, ReservaRepository } from '@Reservas/repositories';
 import { AsistenciaReserva, EstadoClase, EstadoReserva, ModuloOrigen, Prisma } from '@PrismaClient';
-import { ReservasService } from './reservas.service.js';
-import { MENSAJES_RESERVA, RECHAZOS_RESERVA } from './reglas-reserva.js';
+import { MENSAJE_RESERVA_AJENA, MENSAJE_RESERVA_NO_EXISTE, ReservasService } from './reservas.service.js';
+import { MENSAJES_RESERVA, RECHAZOS_CANCELACION, RECHAZOS_RESERVA } from './reglas-reserva.js';
 
 // Martes 10 de noviembre de 2026, 09:00 en El Salvador.
 const AHORA = new Date('2026-11-10T15:00:00Z');
@@ -40,6 +40,8 @@ describe('ReservasService (BE-5.1)', () => {
         existeConfirmada: vi.fn(),
         tieneTraslape: vi.fn(),
         crear: vi.fn(),
+        findParaCancelar: vi.fn(),
+        cancelarConfirmada: vi.fn(),
     };
     const claseRepo = { findEntre: vi.fn(), contarReservasConfirmadas: vi.fn() };
     const estadoMembresia = { obtenerEstado: vi.fn() };
@@ -120,6 +122,8 @@ describe('ReservasService (BE-5.1)', () => {
             membresiaId: 's1',
             estado: EstadoReserva.CONFIRMADA,
             asistencia: AsistenciaReserva.SIN_REGISTRAR,
+            asistenciaRegistradaPorId: null,
+            asistenciaRegistradaEn: null,
             creadaEn: AHORA,
             canceladaEn: null,
             clase: clase(),
@@ -267,6 +271,114 @@ describe('ReservasService (BE-5.1)', () => {
             );
             await expect(service.reservar('u1', 'c1', AHORA)).rejects.toThrow(
                 new ConflictException(RECHAZOS_RESERVA.yaReservada),
+            );
+        });
+    });
+
+    describe('cancelar (BE-6.1)', () => {
+        const TX = { soyLaTransaccion: true };
+        // La clase empieza a las 12:00 de El Salvador: 3 horas después de AHORA (09:00).
+        const INICIO = new Date('2026-11-10T18:00:00Z');
+        const reservaParaCancelar = (datos: Partial<Record<string, unknown>> = {}) => ({
+            id: 'r1',
+            estado: EstadoReserva.CONFIRMADA,
+            claseId: 'c1',
+            usuarioId: 'u1',
+            inicioClase: INICIO,
+            cupoMaximo: 10,
+            ...datos,
+        });
+
+        beforeEach(() => {
+            reservaRepo.transaccion.mockImplementation((fn: (tx: unknown) => unknown) => fn(TX));
+            reservaRepo.findParaCancelar.mockResolvedValue(reservaParaCancelar());
+            reservaRepo.cancelarConfirmada.mockResolvedValue(true);
+            reservaRepo.contarConfirmadasDeClase.mockResolvedValue(6);
+        });
+
+        it('cancela la reserva propia y devuelve los lugares que quedan en la clase', async () => {
+            const res = await service.cancelar('u1', 'r1', AHORA);
+
+            expect(res).toEqual({ id: 'r1', estado: EstadoReserva.CANCELADA_MIEMBRO, lugaresDisponibles: 4 });
+            expect(reservaRepo.contarConfirmadasDeClase).toHaveBeenCalledWith(TX, 'c1');
+        });
+
+        it('condiciona el UPDATE al límite de ahora + 2 horas y guarda la fecha de cancelación', async () => {
+            await service.cancelar('u1', 'r1', AHORA);
+
+            expect(reservaRepo.cancelarConfirmada).toHaveBeenCalledWith(
+                TX,
+                'r1',
+                new Date('2026-11-10T17:00:00Z'),
+                AHORA,
+            );
+        });
+
+        it('acepta una clase que empieza en 2 horas exactas', async () => {
+            reservaRepo.findParaCancelar.mockResolvedValue(
+                reservaParaCancelar({ inicioClase: new Date('2026-11-10T17:00:00Z') }),
+            );
+            await expect(service.cancelar('u1', 'r1', AHORA)).resolves.toMatchObject({
+                estado: EstadoReserva.CANCELADA_MIEMBRO,
+            });
+        });
+
+        it('409 con 1 hora 59 minutos de anticipación, sin tocar la reserva', async () => {
+            reservaRepo.findParaCancelar.mockResolvedValue(
+                reservaParaCancelar({ inicioClase: new Date('2026-11-10T16:59:00Z') }),
+            );
+            await expect(service.cancelar('u1', 'r1', AHORA)).rejects.toThrow(
+                new ConflictException(RECHAZOS_CANCELACION.fueraDePlazo),
+            );
+            expect(reservaRepo.cancelarConfirmada).not.toHaveBeenCalled();
+        });
+
+        it.each([EstadoReserva.CANCELADA_MIEMBRO, EstadoReserva.CANCELADA_GIMNASIO])(
+            '409 "Esta reserva ya fue cancelada" si está %s',
+            async (estado) => {
+                reservaRepo.findParaCancelar.mockResolvedValue(reservaParaCancelar({ estado }));
+                await expect(service.cancelar('u1', 'r1', AHORA)).rejects.toThrow(
+                    new ConflictException(RECHAZOS_CANCELACION.yaCancelada),
+                );
+                expect(reservaRepo.cancelarConfirmada).not.toHaveBeenCalled();
+            },
+        );
+
+        it('404 si la reserva no existe', async () => {
+            reservaRepo.findParaCancelar.mockResolvedValue(null);
+            await expect(service.cancelar('u1', 'r1', AHORA)).rejects.toThrow(
+                new NotFoundException(MENSAJE_RESERVA_NO_EXISTE),
+            );
+        });
+
+        it('403 si la reserva es de otro miembro, y la reserva no cambia', async () => {
+            reservaRepo.findParaCancelar.mockResolvedValue(reservaParaCancelar({ usuarioId: 'otro' }));
+            await expect(service.cancelar('u1', 'r1', AHORA)).rejects.toThrow(
+                new ForbiddenException(MENSAJE_RESERVA_AJENA),
+            );
+            expect(reservaRepo.cancelarConfirmada).not.toHaveBeenCalled();
+        });
+
+        it('doble clic: si otra petición la canceló primero, responde "ya fue cancelada"', async () => {
+            reservaRepo.cancelarConfirmada.mockResolvedValue(false);
+            reservaRepo.findParaCancelar
+                .mockResolvedValueOnce(reservaParaCancelar())
+                .mockResolvedValueOnce(reservaParaCancelar({ estado: EstadoReserva.CANCELADA_MIEMBRO }));
+
+            await expect(service.cancelar('u1', 'r1', AHORA)).rejects.toThrow(
+                new ConflictException(RECHAZOS_CANCELACION.yaCancelada),
+            );
+            expect(reservaRepo.contarConfirmadasDeClase).not.toHaveBeenCalled();
+        });
+
+        it('si la clase se movió a menos de 2 horas entre la lectura y el UPDATE, da el motivo del plazo', async () => {
+            reservaRepo.cancelarConfirmada.mockResolvedValue(false);
+            reservaRepo.findParaCancelar
+                .mockResolvedValueOnce(reservaParaCancelar())
+                .mockResolvedValueOnce(reservaParaCancelar({ inicioClase: new Date('2026-11-10T16:00:00Z') }));
+
+            await expect(service.cancelar('u1', 'r1', AHORA)).rejects.toThrow(
+                new ConflictException(RECHAZOS_CANCELACION.fueraDePlazo),
             );
         });
     });
