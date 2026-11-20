@@ -72,6 +72,8 @@
       "@Accesos/*": ["./src/accesos/*/index.ts"],
       "@Reportes": ["./src/reportes/index.ts"],
       "@Reportes/*": ["./src/reportes/*/index.ts"],
+      "@Resenas": ["./src/resenas/index.ts"],
+      "@Resenas/*": ["./src/resenas/*/index.ts"],
       "@Reservas": ["./src/reservas/index.ts"],
       "@Reservas/*": ["./src/reservas/*/index.ts"],
       "@Asistencia": ["./src/asistencia/index.ts"],

@@ -22,6 +22,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { RutinasModule } from './rutinas/index.js';
 import { ReservasModule } from '@Reservas';
 import { ReportesModule } from '@Reportes';
+import { ResenasModule } from '@Resenas';
 import { MaquinasModule } from '@Maquinas';
 import { AsistenciaModule } from '@Asistencia';
 
@@ -51,6 +52,7 @@ import { AsistenciaModule } from '@Asistencia';
     RutinasModule,
     ReservasModule,
     ReportesModule,
+    ResenasModule,
     MaquinasModule,
     AsistenciaModule,
   ],

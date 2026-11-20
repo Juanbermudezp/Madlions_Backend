@@ -121,6 +121,7 @@ model User {
   sesionesPersonales    SesionPersonal[] @relation("SesionDelEntrenador")
   asistenciasReservaRegistradas Reserva[]
   asistenciasSesionRegistradas  SesionPersonal[] @relation("AsistenciaSesionRegistrada")
+  resenasRecibidas      Resena[]
   rutinasCreadas        Rutina[]
   maquinasActualizadas  Maquina[]
   cambiosDeEstadoMaquina HistorialMaquina[]
@@ -148,6 +149,7 @@ model Miembro {
   registrosAcceso RegistroAcceso[]
   sesionesPersonales SesionPersonal[]
   reservas Reserva[]
+  resenas Resena[]
 
   rutinas Rutina[]
 
@@ -255,6 +257,7 @@ model TipoClase {
   clases Clase[]
   planes PlanTipoClase[]
   membresias MembresiaTipoClase[]
+  resenas Resena[]
 
   @@map("tipo_clase")
 }
@@ -428,6 +431,8 @@ model SesionPersonal {
   asistenciaRegistradaPor   User?     @relation("AsistenciaSesionRegistrada", fields: [asistenciaRegistradaPorId], references: [id])
   asistenciaRegistradaEn    DateTime? @map("asistencia_registrada_en")
   creadaEn     DateTime             @default(now()) @map("creada_en")
+
+  resena Resena?
 
   @@index([miembroId, inicio])
   @@index([entrenadorId, inicio])
@@ -707,6 +712,8 @@ model Reserva {
   creadaEn    DateTime          @default(now()) @map("creada_en")
   canceladaEn DateTime?         @map("cancelada_en")
 
+  resena Resena?
+
   @@index([claseId, estado])
   @@index([miembroId, estado])
   @@index([membresiaId, estado])
@@ -759,4 +766,38 @@ model HistorialMaquina {
 
   @@index([maquinaId, cambiadoEn])
   @@map("historial_maquina")
+}
+
+/// Reseña de una clase o de una sesión personal (H20).
+///
+/// Apunta a la reserva o a la sesión, nunca a las dos, y hay a lo sumo una por
+/// registro (índices únicos). El entrenador y el tipo de clase se copian del
+/// registro al guardarla, así H21 promedia sin depender de lo que pase después
+/// con la clase.
+///
+/// Viven como CHECK en la migración: exactamente uno de los dos registros, al
+/// menos una calificación, el rango 1 a 5 y la coherencia del tipo de clase.
+model Resena {
+  id               String          @id @default(uuid()) @db.Uuid
+  miembroId        String          @map("miembro_id") @db.Uuid
+  miembro          Miembro         @relation(fields: [miembroId], references: [id])
+  reservaId        String?         @unique @map("reserva_id") @db.Uuid
+  reserva          Reserva?        @relation(fields: [reservaId], references: [id])
+  sesionId         String?         @unique @map("sesion_id") @db.Uuid
+  sesion           SesionPersonal? @relation(fields: [sesionId], references: [id])
+  entrenadorId     String          @map("entrenador_id") @db.Uuid
+  entrenador       User            @relation(fields: [entrenadorId], references: [id])
+  /// Nulo en las sesiones personales, que no son de un tipo de clase.
+  tipoClaseId      String?         @map("tipo_clase_id") @db.Uuid
+  tipoClase        TipoClase?      @relation(fields: [tipoClaseId], references: [id])
+  calActividad     Int?            @map("cal_actividad") @db.SmallInt
+  calEntrenador    Int?            @map("cal_entrenador") @db.SmallInt
+  calInstalaciones Int?            @map("cal_instalaciones") @db.SmallInt
+  comentario       String?         @db.VarChar(500)
+  creadaEn         DateTime        @default(now()) @map("creada_en")
+
+  // H21 promedia por entrenador y por tipo de clase.
+  @@index([entrenadorId])
+  @@index([tipoClaseId])
+  @@map("resena")
 }
