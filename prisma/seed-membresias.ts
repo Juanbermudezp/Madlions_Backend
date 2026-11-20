@@ -118,6 +118,9 @@ export async function cargarMembresiasDePrueba(
   await prisma.comprobante.deleteMany({ where: deEstosMiembros });
   await prisma.intentoPago.deleteMany({ where: deEstosMiembros });
   await prisma.cobro.deleteMany({ where: { miembroId: { in: miembroIds } } });
+  // Sus reservas (H5) apuntan a la membresía con la que se reservaron: la base
+  // no deja borrar una membresía que todavía tiene reservas.
+  await prisma.reserva.deleteMany({ where: { miembroId: { in: miembroIds } } });
   await prisma.membresia.deleteMany({ where: { miembroId: { in: miembroIds }, membresiaAnteriorId: { not: null } } });
   await prisma.membresia.deleteMany({ where: { miembroId: { in: miembroIds } } });
 
