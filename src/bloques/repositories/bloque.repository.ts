@@ -6,13 +6,18 @@ import {
     EstadoClase,
     type BloqueDisponibilidad,
     type Prisma,
-} from '@PrismaClient'; 
+} from '@PrismaClient';
 export interface CrearBloqueData {
     entrenadorId: string;
     inicio: Date;
     fin: Date;
     duracionMin: number;
 }
+
+export type BloqueConSesion = BloqueDisponibilidad & {
+    sesion: { miembro: { usuario: { nombre: string; apellido: string } } } | null;
+};
+
 /** Bloque con el nombre de su entrenador (H9). */
 export type BloqueConEntrenador = BloqueDisponibilidad & {
     entrenador: { nombre: string; apellido: string };
@@ -30,10 +35,15 @@ export class BloqueRepository {
         entrenadorId: string,
         desde: Date,
         hasta: Date,
-    ): Promise<BloqueDisponibilidad[]> {
+    ): Promise<BloqueConSesion[]> {
         return this.prisma.bloqueDisponibilidad.findMany({
             where: { entrenadorId, inicio: { gte: desde, lt: hasta } },
             orderBy: { inicio: 'asc' },
+            include: {
+                sesion: {
+                    select: { miembro: { select: { usuario: { select: { nombre: true, apellido: true } } } } },
+                },
+            },
         });
     }
 
@@ -56,7 +66,7 @@ export class BloqueRepository {
         });
     }
 
-        /** Bloque con el nombre de su entrenador, o null si no existe (H9). */
+    /** Bloque con el nombre de su entrenador, o null si no existe (H9). */
     findConEntrenador(id: string): Promise<BloqueConEntrenador | null> {
         return this.prisma.bloqueDisponibilidad.findUnique({
             where: { id },
@@ -74,7 +84,7 @@ export class BloqueRepository {
      *
      * @returns true si lo ocupó; false si ya no estaba disponible.
      */
-    
+
     async ocuparSiDisponible(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
         const { count } = await tx.bloqueDisponibilidad.updateMany({
             where: { id, estado: EstadoBloque.DISPONIBLE },
