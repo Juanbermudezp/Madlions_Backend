@@ -70,6 +70,8 @@
       "@Sesiones/*": ["./src/sesiones/*/index.ts"],
       "@Accesos": ["./src/accesos/index.ts"],
       "@Accesos/*": ["./src/accesos/*/index.ts"],
+      "@Estadisticas": ["./src/estadisticas/index.ts"],
+      "@Estadisticas/*": ["./src/estadisticas/*/index.ts"],
       "@Reportes": ["./src/reportes/index.ts"],
       "@Reportes/*": ["./src/reportes/*/index.ts"],
       "@Resenas": ["./src/resenas/index.ts"],
