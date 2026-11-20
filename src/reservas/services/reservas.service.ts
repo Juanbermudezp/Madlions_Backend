@@ -6,6 +6,7 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { hoyLocal, rangoDeSemana } from '@Common/fechas';
+import { assertOwnership } from '@Common/ownership';
 import { AvisosService } from '@Avisos/services';
 import { ClaseRepository } from '@Clases/repositories';
 import { EstadoMembresiaService } from '@Membresias/services';
@@ -13,18 +14,24 @@ import { ReservaRepository, type ClaseBloqueada } from '@Reservas/repositories';
 import {
     ClaseReservableResponseDto,
     MiReservaResponseDto,
+    ReservaCanceladaResponseDto,
     ReservaCreadaResponseDto,
 } from '@Reservas/dto';
 import { EstadoClase, EstadoReserva, ModuloOrigen, Prisma } from '@PrismaClient';
 import {
+    RECHAZOS_CANCELACION,
     RECHAZOS_RESERVA,
     avisoReservaConfirmada,
+    limiteCancelacion,
     motivoDeRechazo,
+    motivoDeRechazoCancelacion,
     semanaReservable,
     type PestanaReservas,
 } from './reglas-reserva.js';
 
 export const MENSAJE_CLASE_NO_EXISTE = 'La clase no existe.';
+export const MENSAJE_RESERVA_NO_EXISTE = 'La reserva no existe.';
+export const MENSAJE_RESERVA_AJENA = 'No tienes permiso para cancelar esta reserva.';
 
 /**
  * Reservas de clases grupales (H5). El miembro siempre sale del token
@@ -167,6 +174,56 @@ export class ReservasService {
             estado: EstadoReserva.CONFIRMADA,
             lugaresDisponibles: resultado.lugaresDisponibles,
         };
+    }
+
+    /**
+     * BE-6.1 · El miembro autenticado cancela su propia reserva.
+     *
+     * La reserva pasa a CANCELADA_MIEMBRO con la fecha de cancelación. El
+     * lugar de la clase y el crédito del set se liberan solos, porque ambos
+     * se calculan contando las reservas CONFIRMADA. El UPDATE va condicionado
+     * a que siga CONFIRMADA y a que la clase empiece en 2 horas o más, así que
+     * dos cancelaciones simultáneas no se aplican dos veces.
+     *
+     * @throws {NotFoundException} si la reserva no existe.
+     * @throws {ForbiddenException} si es de otro miembro (la reserva no cambia).
+     * @throws {ConflictException} "Esta reserva ya fue cancelada" o
+     *   "Solo puedes cancelar hasta 2 horas antes del inicio de la clase".
+     */
+    async cancelar(
+        usuarioId: string,
+        reservaId: string,
+        ahora: Date = new Date(),
+    ): Promise<ReservaCanceladaResponseDto> {
+        const reserva = await this.reservaRepository.findParaCancelar(reservaId);
+        if (!reserva) throw new NotFoundException(MENSAJE_RESERVA_NO_EXISTE);
+        assertOwnership(reserva.usuarioId, usuarioId, MENSAJE_RESERVA_AJENA);
+
+        const motivo = motivoDeRechazoCancelacion({ estado: reserva.estado, inicioClase: reserva.inicioClase, ahora });
+        if (motivo) throw new ConflictException(motivo);
+
+        const lugaresDisponibles = await this.reservaRepository.transaccion(async (tx) => {
+            const cancelada = await this.reservaRepository.cancelarConfirmada(
+                tx,
+                reservaId,
+                limiteCancelacion(ahora),
+                ahora,
+            );
+            if (!cancelada) return null;
+            const confirmadas = await this.reservaRepository.contarConfirmadasDeClase(tx, reserva.claseId);
+            return reserva.cupoMaximo - confirmadas;
+        });
+
+        if (lugaresDisponibles === null) {
+            // Algo cambió entre la lectura y el UPDATE: otra petición la canceló
+            // (doble clic) o se movió la clase. Se vuelve a leer para dar el motivo real.
+            const actual = await this.reservaRepository.findParaCancelar(reservaId);
+            const motivoActual =
+                actual && motivoDeRechazoCancelacion({ estado: actual.estado, inicioClase: actual.inicioClase, ahora });
+            throw new ConflictException(motivoActual || RECHAZOS_CANCELACION.yaCancelada);
+        }
+
+        return { id: reserva.id, estado: EstadoReserva.CANCELADA_MIEMBRO, lugaresDisponibles };
     }
 
     /** Aviso "Reserva confirmada" por el servicio del Módulo 9 (H22). Nunca lanza. */

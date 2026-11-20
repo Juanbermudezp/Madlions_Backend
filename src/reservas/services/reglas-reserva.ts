@@ -99,6 +99,44 @@ export function motivoDeRechazo(d: DatosReserva): RechazoReserva | null {
     return null;
 }
 
+// ---------------------------------------------------------------------------
+// H6 · Cancelación de una reserva por el miembro (BE-6.1)
+// ---------------------------------------------------------------------------
+
+/** El miembro puede cancelar hasta 2 horas antes del inicio de la clase (S10). */
+export const HORAS_MINIMAS_CANCELACION = 2;
+
+/** Mensajes de rechazo de una cancelación (BE-6.1). Ambos responden 409. */
+export const RECHAZOS_CANCELACION = {
+    yaCancelada: 'Esta reserva ya fue cancelada',
+    fueraDePlazo: 'Solo puedes cancelar hasta 2 horas antes del inicio de la clase',
+} as const;
+export type RechazoCancelacion = (typeof RECHAZOS_CANCELACION)[keyof typeof RECHAZOS_CANCELACION];
+
+/**
+ * Inicio más temprano que puede tener una clase para que su reserva todavía se
+ * pueda cancelar: ahora + 2 horas. Una clase que empieza exactamente en ese
+ * instante sí se puede cancelar ("2 horas o más").
+ */
+export function limiteCancelacion(ahora: Date): Date {
+    return new Date(ahora.getTime() + HORAS_MINIMAS_CANCELACION * 60 * 60 * 1000);
+}
+
+/**
+ * Motivo por el que no se puede cancelar una reserva, o null si se puede.
+ * Primero el estado (una reserva cancelada siempre dice "ya fue cancelada",
+ * aunque la clase esté por empezar) y después el plazo de 2 horas.
+ */
+export function motivoDeRechazoCancelacion(d: {
+    estado: string;
+    inicioClase: Date;
+    ahora: Date;
+}): RechazoCancelacion | null {
+    if (d.estado !== 'CONFIRMADA') return RECHAZOS_CANCELACION.yaCancelada;
+    if (d.inicioClase < limiteCancelacion(d.ahora)) return RECHAZOS_CANCELACION.fueraDePlazo;
+    return null;
+}
+
 const FORMATO_FECHA = new Intl.DateTimeFormat('es-SV', {
     timeZone: ZONA_HORARIA,
     day: '2-digit',
