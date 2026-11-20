@@ -38,6 +38,30 @@ describe('BloquesService', () => {
         vi.resetAllMocks();
     });
 
+    describe('listarSemana', () => {
+        it('un bloque OCUPADO trae el nombre del miembro de la sesión; uno DISPONIBLE, null', async () => {
+            repo.findDelEntrenadorEntre.mockResolvedValue([
+                { ...bloque({ id: 'b1' }), sesion: null },
+                {
+                    ...bloque({ id: 'b2', estado: EstadoBloque.OCUPADO }),
+                    sesion: { miembro: { usuario: { nombre: 'María', apellido: 'López' } } },
+                },
+            ]);
+
+            const bloques = await service.listarSemana('e1', '2026-11-10');
+
+            expect(repo.findDelEntrenadorEntre).toHaveBeenCalledWith(
+                'e1',
+                new Date('2026-11-09T06:00:00Z'),
+                new Date('2026-11-16T06:00:00Z'),
+            );
+            expect(bloques.map((b) => [b.id, b.estado, b.miembro])).toEqual([
+                ['b1', EstadoBloque.DISPONIBLE, null],
+                ['b2', EstadoBloque.OCUPADO, { nombre: 'María López' }],
+            ]);
+        });
+    });
+
     describe('crear', () => {
         it('guarda el bloque con el entrenador del token y fin = inicio + duración', async () => {
             repo.crearSinTraslape.mockImplementation((data) => Promise.resolve(bloque(data)));
