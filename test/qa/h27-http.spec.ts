@@ -22,7 +22,9 @@ function pago(n: number, concepto: ConceptoCobro, monto: string, pagadoEn: strin
         intentos: [{ resultado: 'RECHAZADO', referencia: 'rechazado-no-publico' }, { resultado: 'APROBADO', referencia: 'aprobado' }, { resultado: 'ERROR', referencia: 'error-no-publico' }],
     };
 }
-type CobroPrueba = Omit<ReturnType<typeof pago>, 'pagadoEn'> & { pagadoEn: Date | null };
+type CobroPrueba = Omit<ReturnType<typeof pago>, 'pagadoEn' | 'comprobante'> & {
+    pagadoEn: Date | null; comprobante: ReturnType<typeof pago>['comprobante'] | null;
+};
 type Filtro = { estado: EstadoCobro; concepto: ConceptoCobro; pagadoEn: { gte: Date; lt: Date } };
 
 /** HTTP real de Nest con DI/controlador/servicio/repositorio/pipes/guards.
@@ -94,6 +96,61 @@ describe('H27 ingresos y detalle HTTP con Prisma simulado', () => {
     const detalle = (concepto = 'MEMBRESIA', pagina = '1') => api().get('/api/v1/reportes/ingresos/detalle')
         .query({ ...rango, concepto, pagina }).auth('admin', { type: 'bearer' });
 
+    it('QA-27.1 escenario A: contrato completo contra importes calculados a mano, sin invocar reglas para los esperados', async () => {
+        datos = [
+            pago(1, 'MEMBRESIA', '113.00', '2026-11-01T06:00:00Z', 'DAYPASS'),
+            pago(2, 'RENOVACION', '56.50', '2026-11-02T00:01:00Z', 'MENSUAL'), // 01/11 local
+            pago(3, 'SESION_ADICIONAL', '22.60', '2026-11-03T05:59:59.999Z'), // 02/11 local
+            pago(4, 'MEMBRESIA', '113.00', '2026-10-30T16:00:00Z', 'DAYPASS'),
+            ...(['RECHAZADO', 'ERROR'] as const).map((resultado, i) => ({
+                ...pago(5 + i, 'MEMBRESIA', i === 0 ? '777.00' : '888.00', '2026-11-01T16:00:00Z', 'SET_CLASES'),
+                estado: EstadoCobro.PENDIENTE, pagadoEn: null, comprobante: null,
+                intentos: [{ resultado, referencia: `fallido-${resultado}` }],
+            })),
+        ];
+        const res = await api().get('/api/v1/reportes/ingresos')
+            .query({ desde: '2026-11-01', hasta: '2026-11-02' }).auth('admin', { type: 'bearer' }).expect(200);
+        expect(res.body).toEqual({ total: 192.1, subtotal: 170, iva: 22.1,
+            porConcepto: [{ concepto: 'MEMBRESIA', total: 113 }, { concepto: 'RENOVACION', total: 56.5 }, { concepto: 'SESION_ADICIONAL', total: 22.6 }],
+            porTipoPlan: [{ tipoPlan: 'DAYPASS', total: 113 }, { tipoPlan: 'MENSUAL', total: 56.5 }, { tipoPlan: 'SET_CLASES', total: 0 }],
+            porDia: [{ fecha: '2026-11-01', total: 169.5 }, { fecha: '2026-11-02', total: 22.6 }],
+            anterior: { total: 113, diferencia: 79.1, porcentaje: 70 },
+        });
+        expect(prisma.$queryRaw.mock.calls[0]!.slice(1)).toEqual([
+            new Date('2026-10-30T06:00:00Z'), new Date('2026-11-03T06:00:00Z'),
+        ]);
+        for (const [concepto, fecha, monto, referencia] of [
+            ['MEMBRESIA', '2026-11-01', 113, 'PAY-20261118-000001'],
+            ['RENOVACION', '2026-11-01', 56.5, 'PAY-20261118-000002'],
+            ['SESION_ADICIONAL', '2026-11-02', 22.6, 'PAY-20261118-000003'],
+        ]) {
+            const det = await api().get('/api/v1/reportes/ingresos/detalle')
+                .query({ desde: '2026-11-01', hasta: '2026-11-02', concepto }).auth('admin', { type: 'bearer' }).expect(200);
+            expect(det.body).toEqual({ total: 1, pagina: 1, items: [{ miembro: 'Ana Martínez', codigo: 'MBR-000001', fecha, monto, referencia }] });
+        }
+    });
+    it('períodos con ingresos iguales mantienen diferencia y porcentaje cero', async () => {
+        datos = [pago(1, 'MEMBRESIA', '113', '2026-11-18T16:00:00Z'), pago(2, 'MEMBRESIA', '113', '2026-11-17T16:00:00Z')];
+        const res = await ingresos().expect(200);
+        expect(res.body.anterior).toEqual({ total: 113, diferencia: 0, porcentaje: 0 });
+    });
+    it('QA-27.1 escenario D: actual vacío y anterior positivo conserva todos los desgloses cero y -100 %', async () => {
+        datos = [pago(1, 'MEMBRESIA', '113', '2026-11-17T16:00:00Z', 'DAYPASS')];
+        const res = await ingresos().expect(200);
+        expect(res.body).toEqual({ total: 0, subtotal: 0, iva: 0,
+            porConcepto: [{ concepto: 'MEMBRESIA', total: 0 }, { concepto: 'RENOVACION', total: 0 }, { concepto: 'SESION_ADICIONAL', total: 0 }],
+            porTipoPlan: [{ tipoPlan: 'DAYPASS', total: 0 }, { tipoPlan: 'MENSUAL', total: 0 }, { tipoPlan: 'SET_CLASES', total: 0 }],
+            porDia: [{ fecha: '2026-11-18', total: 0 }], anterior: { total: 113, diferencia: -113, porcentaje: -100 },
+        });
+    });
+    it('acepta doce meses inclusivos (365 días) en ambos endpoints', async () => {
+        const anual = { desde: '2026-01-01', hasta: '2026-12-31' };
+        const res = await api().get('/api/v1/reportes/ingresos').query(anual).auth('admin', { type: 'bearer' }).expect(200);
+        expect(res.body.porDia).toHaveLength(365);
+        expect(res.body.porDia[0].fecha).toBe('2026-01-01');
+        expect(res.body.porDia[364].fecha).toBe('2026-12-31');
+        await api().get('/api/v1/reportes/ingresos/detalle').query({ ...anual, concepto: 'MEMBRESIA' }).auth('admin', { type: 'bearer' }).expect(200);
+    });
     it('200: tres cobros pagados, creadoEn distinto, intentos fallidos excluidos y límites UTC-6', async () => {
         const res = await ingresos().expect(200);
         expect(res.body).toEqual({ total: 1130, subtotal: 1000, iva: 130,
@@ -136,6 +193,7 @@ describe('H27 ingresos y detalle HTTP con Prisma simulado', () => {
         expect(primera.body.items[19].referencia).toBe('PAY-20261118-000020');
         expect(segunda.body.items[0].referencia).toBe('PAY-20261118-000021');
         expect(segunda.body.items[4].referencia).toBe('PAY-20261118-000025');
+        expect(new Set([...primera.body.items, ...segunda.body.items].map((p: { referencia: string }) => p.referencia)).size).toBe(25);
         expect(vacia.body).toEqual({ items: [], total: 25, pagina: 3 });
     });
     it('ordena primero por fecha de pago descendente, después por id ascendente', async () => {
@@ -161,7 +219,8 @@ describe('H27 ingresos y detalle HTTP con Prisma simulado', () => {
         expect(prisma.$queryRaw).not.toHaveBeenCalled(); expect(prisma.$transaction).not.toHaveBeenCalled();
     });
     it.each([{}, { concepto: 'OTRO' }, { concepto: 'MEMBRESIA', pagina: '0' }, { concepto: 'MEMBRESIA', pagina: '1.5' },
-        { concepto: 'MEMBRESIA', pagina: '-1' }, { concepto: 'MEMBRESIA', pagina: 'abc' }, { concepto: 'MEMBRESIA', pagina: '' }])('400 por concepto/página inválidos %j', async (query) => {
+        { concepto: 'MEMBRESIA', pagina: '-1' }, { concepto: 'MEMBRESIA', pagina: 'abc' }, { concepto: 'MEMBRESIA', pagina: '' },
+        { concepto: 'MEMBRESIA', pagina: '9007199254740992' }, { concepto: 'MEMBRESIA', pagina: '1e2' }])('400 por concepto/página inválidos %j', async (query) => {
         await api().get('/api/v1/reportes/ingresos/detalle').query(query).auth('admin', { type: 'bearer' }).expect(400);
         expect(prisma.$transaction).not.toHaveBeenCalled();
     });

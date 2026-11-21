@@ -1,0 +1,87 @@
+# QA-27.1 PLANTILLA NO EJECUTADA contra PostgreSQL.
+# Solo una API conectada a QA aislada y autorizada, migraciones YA aplicadas.
+# Sin fixtures reales preparados, estos GET no constituyen una validación.
+@baseUrl = http://127.0.0.1:3001/api/v1
+@adminToken = REEMPLAZAR_JWT_QA_ADMIN
+@miembroToken = REEMPLAZAR_JWT_QA_MIEMBRO
+@entrenadorToken = REEMPLAZAR_JWT_QA_ENTRENADOR
+@recepcionToken = REEMPLAZAR_JWT_QA_RECEPCION
+
+### A: 192.10 / 170.00 / 22.10; anterior113 / diferencia79.10 / porcentaje70
+GET {{baseUrl}}/reportes/ingresos?desde=2026-11-01&hasta=2026-11-02
+Authorization: Bearer {{adminToken}}
+
+### A: solo pago113 y referencia del comprobante, no intentos fallidos
+GET {{baseUrl}}/reportes/ingresos/detalle?concepto=MEMBRESIA&desde=2026-11-01&hasta=2026-11-02&pagina=1
+Authorization: Bearer {{adminToken}}
+
+### A:56.50 el01/11 local, aunque pagado_en sea02/11 UTC
+GET {{baseUrl}}/reportes/ingresos/detalle?concepto=RENOVACION&desde=2026-11-01&hasta=2026-11-02&pagina=1
+Authorization: Bearer {{adminToken}}
+
+### A:22.60, incluido en general y excluido en planes
+GET {{baseUrl}}/reportes/ingresos/detalle?concepto=SESION_ADICIONAL&desde=2026-11-01&hasta=2026-11-02&pagina=1
+Authorization: Bearer {{adminToken}}
+
+### B: sembrar SOLO35.50 el10/11 local, anterior09/11 vacío ->null
+GET {{baseUrl}}/reportes/ingresos?desde=2026-11-10&hasta=2026-11-10
+Authorization: Bearer {{adminToken}}
+
+### C:25 cobros1.13 el04/11, referencias únicas, orden fechaDESC/idASC
+GET {{baseUrl}}/reportes/ingresos/detalle?concepto=MEMBRESIA&desde=2026-11-04&hasta=2026-11-04&pagina=1
+Authorization: Bearer {{adminToken}}
+
+### C:5 filas, total25
+GET {{baseUrl}}/reportes/ingresos/detalle?concepto=MEMBRESIA&desde=2026-11-04&hasta=2026-11-04&pagina=2
+Authorization: Bearer {{adminToken}}
+
+### C:0 filas, total25
+GET {{baseUrl}}/reportes/ingresos/detalle?concepto=MEMBRESIA&desde=2026-11-04&hasta=2026-11-04&pagina=3
+Authorization: Bearer {{adminToken}}
+
+### D:sembrar113 el11/11, nada12/11 ->total0/diferencia-113/porcentaje-100
+GET {{baseUrl}}/reportes/ingresos?desde=2026-11-12&hasta=2026-11-12
+Authorization: Bearer {{adminToken}}
+
+### E:dos cobros0.05 el14/11 ->0.10/0.09/0.01 agregado; recibos0.08/0.02
+GET {{baseUrl}}/reportes/ingresos?desde=2026-11-14&hasta=2026-11-14
+Authorization: Bearer {{adminToken}}
+
+### 30 días por defecto
+GET {{baseUrl}}/reportes/ingresos
+Authorization: Bearer {{adminToken}}
+
+### 12 meses válidos
+GET {{baseUrl}}/reportes/ingresos?desde=2026-01-01&hasta=2026-12-31
+Authorization: Bearer {{adminToken}}
+
+### 400 exceso (repetir en /detalle con concepto)
+GET {{baseUrl}}/reportes/ingresos?desde=2026-01-01&hasta=2027-01-01
+Authorization: Bearer {{adminToken}}
+
+### 400 inversión
+GET {{baseUrl}}/reportes/ingresos?desde=2026-11-02&hasta=2026-11-01
+Authorization: Bearer {{adminToken}}
+
+### 400 concepto
+GET {{baseUrl}}/reportes/ingresos/detalle?concepto=OTRO
+Authorization: Bearer {{adminToken}}
+
+### 400 página: repetir con -1 /1.5 /abc /1e2 /9007199254740992
+GET {{baseUrl}}/reportes/ingresos/detalle?concepto=MEMBRESIA&pagina=9007199254740992
+Authorization: Bearer {{adminToken}}
+
+### 401 sin token (repetir en detalle)
+GET {{baseUrl}}/reportes/ingresos
+
+### 403 MIEMBRO (repetir en detalle)
+GET {{baseUrl}}/reportes/ingresos
+Authorization: Bearer {{miembroToken}}
+
+### 403 ENTRENADOR (repetir en detalle)
+GET {{baseUrl}}/reportes/ingresos
+Authorization: Bearer {{entrenadorToken}}
+
+### 403 RECEPCION (repetir en detalle)
+GET {{baseUrl}}/reportes/ingresos
+Authorization: Bearer {{recepcionToken}}

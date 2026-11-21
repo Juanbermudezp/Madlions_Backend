@@ -1,0 +1,36 @@
+escenario,metrica,esperado,unidad,calculo_independiente
+A,total,192.10,USD,113.00+56.50+22.60
+A,subtotal,170.00,USD,192.10/1.13
+A,iva,22.10,USD,192.10-170.00
+A,MEMBRESIA,113.00,USD,literal
+A,RENOVACION,56.50,USD,literal
+A,SESION_ADICIONAL,22.60,USD,literal
+A,DAYPASS,113.00,USD,literal historico
+A,MENSUAL,56.50,USD,literal historico
+A,SET_CLASES,0.00,USD,sin cobros pagados
+A,2026-11-01,169.50,USD,113.00+56.50
+A,2026-11-02,22.60,USD,literal
+A,anterior_total,113.00,USD,literal
+A,diferencia,79.10,USD,192.10-113.00
+A,porcentaje,70.0,porcentaje,79.10/113.00*100
+B,anterior_total,0.00,USD,sin pagos anteriores
+B,diferencia,35.50,USD,35.50-0.00
+B,porcentaje,null,nulo,denominador cero
+B,mensaje,Sin período de comparación,texto,literal de aceptación
+C,pagina_1,20,registros,primeros 20 de 25
+C,pagina_2,5,registros,25-20
+C,pagina_3,0,registros,fuera de rango
+C,total_filtrado,25,registros,25 cobros con referencias unicas
+C,total_monetario,28.25,USD,25*1.13
+D,total,0.00,USD,sin pagos actuales
+D,subtotal,0.00,USD,0/1.13
+D,iva,0.00,USD,0-0
+D,todos_desgloses,0.00,USD,sin pagos actuales
+D,anterior_total,113.00,USD,literal
+D,diferencia,-113.00,USD,0-113.00
+D,porcentaje,-100.0,porcentaje,-113.00/113.00*100
+E,total,0.10,USD,0.05+0.05
+E,subtotal_agregado,0.09,USD,ROUND_HALF_UP(0.10/1.13;2)
+E,iva_agregado,0.01,USD,0.10-0.09
+E,suma_subtotales_comprobantes,0.08,USD,0.04+0.04
+E,suma_iva_comprobantes,0.02,USD,0.01+0.01
