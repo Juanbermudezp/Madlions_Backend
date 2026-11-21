@@ -21,6 +21,7 @@ import { AppModule } from './../src/app.module.js';
 import { hoyLocal, sumarDias } from '@Common/fechas';
 import { PrismaService } from '@Prisma/services';
 import { EstadoClase, Rol, TipoPlan } from '@PrismaClient';
+import { auditoriaClaseFixture } from './qa/auditoria-clase-fixture.js';
 
 const PASSWORD = 'Demo1234!';
 const MIEMBROS = 10;
@@ -55,6 +56,7 @@ describe('H5 · POST /reservas', () => {
                 fin: new Date(inicio.getTime() + HORA),
                 cupoMaximo: datos.cupo ?? 10,
                 estado: datos.estado ?? EstadoClase.PROGRAMADA,
+                ...await auditoriaClaseFixture(prisma, datos.estado ?? EstadoClase.PROGRAMADA),
             },
         });
         clases.push(clase.id);

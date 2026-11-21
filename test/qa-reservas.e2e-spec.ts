@@ -18,6 +18,7 @@ import { AppModule } from './../src/app.module.js';
 import { hoyLocal, sumarDias } from '@Common/fechas';
 import { PrismaService } from '@Prisma/services';
 import { EstadoClase, TipoPlan } from '@PrismaClient';
+import { auditoriaClaseFixture } from './qa/auditoria-clase-fixture.js';
 
 const HORA = 60 * 60 * 1000;
 const CONCURRENTES = 10;
@@ -99,8 +100,7 @@ describe('QA-5.1 · Reserva de un cupo (H5)', () => {
             data: {
                 tipoClaseId: tipo[datos.tipo ?? 'yoga'].id, entrenadorId, inicio, fin: new Date(inicio.getTime() + HORA),
                 cupoMaximo: datos.cupo ?? 10, estado: datos.estado ?? EstadoClase.PROGRAMADA,
-                // Cuando DB-7.1 (H7) llegue a develop, una clase cancelada exige además
-                // motivoCancelacion, canceladaEn y canceladaPorId (CHECK de la migración).
+                ...await auditoriaClaseFixture(prisma, datos.estado ?? EstadoClase.PROGRAMADA),
             },
         });
         clases.push(clase.id);

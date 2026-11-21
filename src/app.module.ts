@@ -11,6 +11,7 @@ import { validateEnv } from '@Config';
 import { ProgresoModule } from './progreso/progreso.module.js';
 import { BloquesModule } from '@Bloques';
 import { ClasesModule } from '@Clases';
+import { CancelacionClasesModule } from './clases/cancelacion-clases.module.js';
 import { PlanesModule } from '@Planes';
 import { ConfiguracionModule } from '@Configuracion';
 import { EntrenadoresModule } from '@Entrenadores';
@@ -42,6 +43,7 @@ import { AsistenciaModule } from '@Asistencia';
     AvisosVencimientoModule,
     AuthModule,
     ClasesModule,
+    CancelacionClasesModule,
     BloquesModule,
     ProgresoModule,
     PlanesModule,

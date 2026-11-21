@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
-import { ActividadTraslapadaError, ClaseNoModificableError } from '@Clases/errors';
+import { ActividadTraslapadaError, ClaseNoModificableError, ClaseNoCancelableError } from '@Clases/errors';
 import {
   EstadoClase,
   EstadoReserva,
@@ -26,6 +26,16 @@ export interface DatosClase {
   cupoMaximo: number;
 }
 
+export interface ReservaCanceladaParaAviso {
+  reservaId: string;
+  miembroId: string;
+  creditoDevuelto: boolean;
+}
+export interface CancelacionClaseConfirmada {
+  clase: { id: string; inicio: Date; fin: Date; tipoClase: { nombre: string }; entrenador: { nombre: string; apellido: string } };
+  reservas: ReservaCanceladaParaAviso[];
+}
+
 const INCLUIR_RELACIONES = {
   tipoClase: true,
   entrenador: { select: { id: true, nombre: true, apellido: true } },
@@ -35,6 +45,38 @@ const INCLUIR_RELACIONES = {
 @Injectable()
 export class ClaseRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** H7: la actualización condicional toma el mismo lock de fila que H5.
+   * Solo un cancelador gana; H4 no puede editar la clase mientras se cancela.
+   * UPDATE RETURNING de reservas devuelve únicamente las realmente cambiadas,
+   * incluso si H6 canceló una mientras esperábamos: no hay lista obsoleta ni
+   * doble devolución. Los créditos se calculan por conteo, sin incrementar nada.
+   */
+  cancelar(id: string, motivo: string, administradorId: string, ahora: Date): Promise<CancelacionClaseConfirmada> {
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.clase.updateMany({
+        where: { id, estado: EstadoClase.PROGRAMADA, inicio: { gt: ahora } },
+        data: { estado: EstadoClase.CANCELADA_GIMNASIO, motivoCancelacion: motivo, canceladaEn: ahora, canceladaPorId: administradorId },
+      });
+      if (count === 0) {
+        const actual = await tx.clase.findUnique({ where: { id }, select: { estado: true } });
+        throw new ClaseNoCancelableError(!actual ? 'NO_EXISTE' : actual.estado === EstadoClase.CANCELADA_GIMNASIO ? 'CANCELADA' : 'INICIADA');
+      }
+      const clase = await tx.clase.findUniqueOrThrow({ where: { id }, select: {
+        id: true, inicio: true, fin: true, tipoClase: { select: { nombre: true } },
+        entrenador: { select: { nombre: true, apellido: true } },
+      } });
+      const reservas = await tx.$queryRaw<ReservaCanceladaParaAviso[]>`
+        UPDATE reserva AS r
+        SET estado = 'CANCELADA_GIMNASIO', cancelada_en = ${ahora}
+        FROM membresia AS m
+        WHERE r.clase_id = ${id}::uuid AND r.estado = 'CONFIRMADA'
+          AND m.id = r.membresia_id
+        RETURNING r.id AS "reservaId", r.miembro_id AS "miembroId",
+                  (m.tipo_plan = 'SET_CLASES') AS "creditoDevuelto"`;
+      return { clase, reservas };
+    }, { isolationLevel: 'ReadCommitted' });
+  }
 
   findProgramadasDelEntrenadorEntre(
     entrenadorId: string,

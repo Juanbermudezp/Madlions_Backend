@@ -1,12 +1,10 @@
 /**
  * QA-25.1 · Aviso de cancelación de clase reservada (H25, Módulo 9)
  *
- * Contra la base real del docker-compose. Mientras BE-7.1 (POST
- * /clases/:id/cancelar) no exista, la prueba hace lo mismo que hará ese
- * endpoint: en una transacción pasa la clase y sus reservas CONFIRMADA a
- * CANCELADA_GIMNASIO y, después, llama a AvisosClaseService.avisarCancelacion()
- * con los miembros afectados. Cuando BE-7.1 esté en develop, QA-C07 se prueba
- * con el endpoint (ver docs/qa/QA-25.1-pruebas-aviso-cancelacion.md).
+ * Integración real H7/H25 mediante POST /clases/:id/cancelar. El endpoint
+ * guarda la auditoría DB-7.1 y llama al servicio oficial de H25 tras commit.
+ * No ejecutar sin PostgreSQL QA aislado/autorizado y migraciones aplicadas.
+ * La preparación de esta prueba NO implica que se haya ejecutado localmente.
  *
  * Datos: una clase con 2 reservas confirmadas (una con Set de clases), 1
  * cancelada por el miembro y un miembro sin reserva. Todo lo que crea
@@ -19,6 +17,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import type { MockInstance } from 'vitest';
 import { AppModule } from './../src/app.module.js';
 import {
   AvisosClaseService,
@@ -47,6 +46,10 @@ describe('QA-25.1 · Aviso de cancelación de clase reservada (H25)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let avisosClase: AvisosClaseService;
+  let envio: MockInstance<AvisosClaseService['avisarCancelacion']>;
+  let tokenAdmin: string;
+  let administradorId: string;
+  let canceladaPreviaEn: Date;
   const corrida = randomUUID().slice(0, 6);
   let siguiente = randomInt(100_000, 899_000);
   const hoy = hoyLocal();
@@ -136,34 +139,6 @@ describe('QA-25.1 · Aviso de cancelación de clase reservada (H25)', () => {
   const avisosDe = (clave: Clave) =>
     prisma.aviso.findMany({ where: { miembroId: casos[clave].miembroId } });
 
-  /**
-   * Lo que hará BE-7.1: cancela la clase y sus reservas CONFIRMADA en una
-   * transacción y devuelve los miembros afectados (con set = crédito devuelto).
-   */
-  async function cancelarComoBE71(): Promise<MiembroAfectado[]> {
-    return prisma.$transaction(async (tx) => {
-      const confirmadas = await tx.reserva.findMany({
-        where: { claseId, estado: EstadoReserva.CONFIRMADA },
-        select: { miembroId: true, membresia: { select: { tipoPlan: true } } },
-      });
-      await tx.clase.update({
-        where: { id: claseId },
-        data: { estado: EstadoClase.CANCELADA_GIMNASIO },
-      });
-      await tx.reserva.updateMany({
-        where: { claseId, estado: EstadoReserva.CONFIRMADA },
-        data: {
-          estado: EstadoReserva.CANCELADA_GIMNASIO,
-          canceladaEn: new Date(),
-        },
-      });
-      return confirmadas.map((r) => ({
-        miembroId: r.miembroId,
-        devolvioCredito: r.membresia.tipoPlan === TipoPlan.SET_CLASES,
-      }));
-    });
-  }
-
   let afectados: MiembroAfectado[];
 
   beforeAll(async () => {
@@ -182,6 +157,8 @@ describe('QA-25.1 · Aviso de cancelación de clase reservada (H25)', () => {
     await app.init();
     prisma = app.get(PrismaService);
     avisosClase = app.get(AvisosClaseService);
+    // Spy sin sustituir implementación: conserva mensajes y envío H25 reales.
+    envio = vi.spyOn(avisosClase, 'avisarCancelacion');
 
     const recepcion = await prisma.user.findUnique({
       where: { email: 'recepcion@madlions.com' },
@@ -189,6 +166,9 @@ describe('QA-25.1 · Aviso de cancelación de clase reservada (H25)', () => {
     if (!recepcion) throw new Error('Falta el seed: corre npm run db:seed');
     recepcionId = recepcion.id;
     passwordHash = recepcion.passwordHash; // Demo1234!
+    const administrador = await crearUsuario(Rol.ADMINISTRADOR, 'Admin', `QA25 ${corrida}`);
+    administradorId = administrador.id;
+    tokenAdmin = await login(administrador.email);
 
     const crearPlan = async (t: TipoPlan, cantidadClases: number | null) => {
       const { id } = await prisma.plan.create({
@@ -235,6 +215,7 @@ describe('QA-25.1 · Aviso de cancelación de clase reservada (H25)', () => {
     const sinReserva = await crearMiembro(planMensual, TipoPlan.MENSUAL);
     Object.assign(casos, { mensual, set, canceloEl, sinReserva });
 
+    canceladaPreviaEn = new Date();
     await prisma.reserva.createMany({
       data: [
         {
@@ -248,19 +229,23 @@ describe('QA-25.1 · Aviso de cancelación de clase reservada (H25)', () => {
           miembroId: canceloEl.miembroId,
           membresiaId: canceloEl.membresiaId,
           estado: EstadoReserva.CANCELADA_MIEMBRO,
-          canceladaEn: new Date(),
+          canceladaEn: canceladaPreviaEn,
         },
       ],
     });
 
-    afectados = await cancelarComoBE71();
   }, 60_000);
 
   afterAll(async () => {
+    envio?.mockRestore();
+    if (!prisma) { if (app) await app.close(); return; }
     await prisma.aviso.deleteMany({ where: { miembroId: { in: miembros } } });
-    await prisma.reserva.deleteMany({ where: { claseId } });
-    await prisma.clase.deleteMany({ where: { id: claseId } });
-    await prisma.tipoClase.deleteMany({ where: { id: tipoClaseId } });
+    // Si beforeAll falló, un UUID undefined no debe convertirse en DELETE global.
+    if (claseId) {
+      await prisma.reserva.deleteMany({ where: { claseId } });
+      await prisma.clase.deleteMany({ where: { id: claseId } });
+    }
+    if (tipoClaseId) await prisma.tipoClase.deleteMany({ where: { id: tipoClaseId } });
     await prisma.membresia.deleteMany({
       where: { miembroId: { in: miembros } },
     });
@@ -272,7 +257,14 @@ describe('QA-25.1 · Aviso de cancelación de clase reservada (H25)', () => {
 
   // Los casos van en orden: cada uno parte de lo que dejó el anterior.
 
-  it('QA-C01 · los afectados son solo las reservas "Confirmada" (con set: crédito devuelto)', () => {
+  it('QA-C01 · los afectados son solo las reservas "Confirmada" (con set: crédito devuelto)', async () => {
+    const respuesta = await http().post(`/api/v1/clases/${claseId}/cancelar`)
+      .auth(tokenAdmin, { type: 'bearer' }).send({ motivo: MOTIVO }).expect(200);
+    expect(respuesta.body).toEqual({ id: claseId, estado: EstadoClase.CANCELADA_GIMNASIO, reservasCanceladas: 2 });
+    expect(envio).toHaveBeenCalledTimes(1);
+    expect(envio.mock.calls[0]![0]).toBe(claseId);
+    expect(envio.mock.calls[0]![2]).toBe(MOTIVO);
+    afectados = envio.mock.calls[0]![1]; // captura entregada por H7, no reconstruida después
     expect(afectados).toEqual(
       expect.arrayContaining([
         { miembroId: casos.mensual.miembroId, devolvioCredito: false },
@@ -283,11 +275,7 @@ describe('QA-25.1 · Aviso de cancelación de clase reservada (H25)', () => {
   });
 
   it('QA-C02 · cada miembro con reserva confirmada recibe un aviso por el servicio de H22', async () => {
-    const resultado = await avisosClase.avisarCancelacion(
-      claseId,
-      afectados,
-      MOTIVO,
-    );
+    const resultado = await envio.mock.results[0]!.value;
 
     expect(resultado).toEqual({
       creados: 2,
@@ -356,6 +344,20 @@ describe('QA-25.1 · Aviso de cancelación de clase reservada (H25)', () => {
         (i) => i.titulo,
       ),
     ).toEqual([`Clase cancelada: ${tipo}`]);
+  });
+
+  it('QA-C07 · endpoint H7 conserva auditoría DB-7.1 y la reserva cancelada por el miembro', async () => {
+    const clase = await prisma.clase.findUniqueOrThrow({ where: { id: claseId } });
+    expect(clase).toMatchObject({ estado: EstadoClase.CANCELADA_GIMNASIO, motivoCancelacion: MOTIVO, canceladaPorId: administradorId });
+    expect(clase.canceladaEn).toBeInstanceOf(Date);
+    const reservas = await prisma.reserva.findMany({ where: { claseId } });
+    expect(reservas.filter(r => r.estado === EstadoReserva.CANCELADA_GIMNASIO)).toHaveLength(2);
+    expect(reservas.find(r => r.miembroId === casos.canceloEl.miembroId))
+      .toMatchObject({ estado: EstadoReserva.CANCELADA_MIEMBRO, canceladaEn: canceladaPreviaEn });
+    await http().post(`/api/v1/clases/${claseId}/cancelar`)
+      .auth(tokenAdmin, { type: 'bearer' }).send({ motivo: MOTIVO }).expect(409);
+    expect(envio).toHaveBeenCalledTimes(1);
+    expect(await prisma.aviso.count({ where: { miembroId: { in: miembros } } })).toBe(2);
   });
 
   it('QA-C08 · repetir el envío de la misma cancelación no crea avisos duplicados', async () => {

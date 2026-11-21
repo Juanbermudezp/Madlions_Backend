@@ -22,6 +22,7 @@ import { aFechaLocal, hoyLocal, sumarDias } from '@Common/fechas';
 import { MENSAJES_REPORTE, sumarMeses } from '@Reportes/services';
 import { PrismaService } from '@Prisma/services';
 import { EstadoClase, EstadoReserva, TipoPlan } from '@PrismaClient';
+import { auditoriaClaseFixture } from './qa/auditoria-clase-fixture.js';
 
 const HORA = 60 * 60 * 1000;
 const MIEMBROS = 20;
@@ -95,6 +96,7 @@ describe('QA-26.1 · Reporte de ocupación de clases grupales (H26)', () => {
                 fin: new Date(datos.inicio.getTime() + HORA),
                 cupoMaximo: datos.cupo,
                 estado: datos.estado ?? EstadoClase.PROGRAMADA,
+                ...await auditoriaClaseFixture(prisma, datos.estado ?? EstadoClase.PROGRAMADA),
                 // Cuando DB-7.1 (H7) llegue a develop, una clase cancelada exige además
                 // motivoCancelacion, canceladaEn y canceladaPorId (CHECK de la migración).
             },

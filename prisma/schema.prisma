@@ -114,7 +114,8 @@ model User {
   refreshTokens RefreshToken[]
   miembro       Miembro?
   bloquesDisponibilidad BloqueDisponibilidad[]
-  clases                Clase[]
+  clases                Clase[] @relation("ClaseEntrenador")
+  clasesCanceladas      Clase[] @relation("ClaseCanceladaPor")
   membresiasRegistradas Membresia[]
   accesosRegistrados    RegistroAcceso[] @relation("AccesoRegistradoPor")
   salidasRegistradas    RegistroAcceso[] @relation("AccesoSalidaRegistradaPor")
@@ -270,12 +271,17 @@ model Clase {
   tipoClaseId  String      @map("tipo_clase_id") @db.Uuid
   tipoClase    TipoClase   @relation(fields: [tipoClaseId], references: [id])
   entrenadorId String      @map("entrenador_id") @db.Uuid
-  entrenador   User        @relation(fields: [entrenadorId], references: [id])
+  entrenador   User        @relation("ClaseEntrenador", fields: [entrenadorId], references: [id])
   descripcion  String?     @db.VarChar(300)
   inicio       DateTime
   fin          DateTime
   cupoMaximo   Int         @map("cupo_maximo")
   estado       EstadoClase @default(PROGRAMADA)
+  /// Los tres campos son obligatorios solo en CANCELADA_GIMNASIO (CHECK SQL).
+  motivoCancelacion String? @map("motivo_cancelacion") @db.VarChar(250)
+  canceladaEn       DateTime? @map("cancelada_en") @db.Timestamp(3)
+  canceladaPorId    String? @map("cancelada_por_id") @db.Uuid
+  canceladaPor      User? @relation("ClaseCanceladaPor", fields: [canceladaPorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   creadoEn     DateTime    @default(now()) @map("creado_en")
 
   reservas Reserva[]

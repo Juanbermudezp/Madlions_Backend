@@ -20,6 +20,9 @@ function clase(datos: Partial<ClaseConRelaciones> = {}): ClaseConRelaciones {
         fin: new Date('2026-11-10T14:00:00Z'), // martes 08:00
         cupoMaximo: 20,
         estado: EstadoClase.PROGRAMADA,
+        motivoCancelacion: null,
+        canceladaEn: null,
+        canceladaPorId: null,
         creadoEn: AHORA,
         tipoClase: {
             id: 't1',
