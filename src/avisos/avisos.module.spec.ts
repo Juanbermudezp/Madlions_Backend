@@ -4,7 +4,11 @@ import { Test } from '@nestjs/testing';
 import { PrismaService } from '@Prisma/services';
 import { AvisosModule } from './avisos.module.js';
 import { AvisosController } from './controllers/index.js';
-import { AvisosBandejaService, AvisosService } from './services/index.js';
+import {
+  AvisosBandejaService,
+  AvisosClaseService,
+  AvisosService,
+} from './services/index.js';
 
 /** PrismaModule es global en la app; aquí se reemplaza por un doble. */
 @Module({
@@ -40,12 +44,18 @@ describe('AvisosModule', () => {
 
     expect(ref.get(AvisosService)).toBeInstanceOf(AvisosService);
     expect(ref.get(AvisosBandejaService)).toBeInstanceOf(AvisosBandejaService);
+    expect(ref.get(AvisosClaseService)).toBeInstanceOf(AvisosClaseService);
   }, 15000);
 
-  it('solo exporta AvisosService: la bandeja es interna del módulo', () => {
+  it('exporta AvisosService y AvisosClaseService (H25); la bandeja es interna del módulo', () => {
     expect(Reflect.getMetadata('exports', AvisosModule)).toEqual([
       AvisosService,
+      AvisosClaseService,
     ]);
+  });
+
+  it('no importa otros módulos, para que ClasesModule lo importe sin ciclos (H25)', () => {
+    expect(Reflect.getMetadata('imports', AvisosModule) ?? []).toEqual([]);
   });
 
   it('la API solo lee y marca como leídos: ninguna ruta crea avisos (H22)', () => {
