@@ -1,8 +1,11 @@
 import {
     MENSAJES_RESERVA,
+    RECHAZOS_CANCELACION,
     RECHAZOS_RESERVA,
     avisoReservaConfirmada,
+    limiteCancelacion,
     motivoDeRechazo,
+    motivoDeRechazoCancelacion,
     semanaReservable,
     type DatosReserva,
 } from './reglas-reserva.js';
@@ -142,6 +145,55 @@ describe('avisoReservaConfirmada (criterio 9 de H5)', () => {
             mensaje:
                 'Tu lugar en Yoga del 18/11/2026 de 18:00 a 19:00 con Carlos Martínez quedó reservado. ' +
                 'Puedes cancelar hasta 2 horas antes del inicio.',
+        });
+    });
+});
+
+describe('motivoDeRechazoCancelacion (BE-6.1)', () => {
+    const MINUTO = 60 * 1000;
+    // Clase que empieza dentro de `minutos` contados desde AHORA.
+    const cancelar = (minutos: number, estado = 'CONFIRMADA') =>
+        motivoDeRechazoCancelacion({ estado, inicioClase: new Date(AHORA.getTime() + minutos * MINUTO), ahora: AHORA });
+
+    it('el límite es ahora + 2 horas', () => {
+        expect(limiteCancelacion(AHORA)).toEqual(new Date('2026-11-10T17:00:00Z'));
+    });
+
+    it('acepta con 3 horas de anticipación', () => {
+        expect(cancelar(180)).toBeNull();
+    });
+
+    it('acepta con 2 horas exactas (criterio: "en 2 horas o más")', () => {
+        expect(cancelar(120)).toBeNull();
+    });
+
+    it('rechaza con 1 hora 59 minutos y con un milisegundo menos de 2 horas', () => {
+        expect(cancelar(119)).toBe(RECHAZOS_CANCELACION.fueraDePlazo);
+        expect(
+            motivoDeRechazoCancelacion({
+                estado: 'CONFIRMADA',
+                inicioClase: new Date(limiteCancelacion(AHORA).getTime() - 1),
+                ahora: AHORA,
+            }),
+        ).toBe(RECHAZOS_CANCELACION.fueraDePlazo);
+    });
+
+    it('rechaza una clase que ya empezó o terminó', () => {
+        expect(cancelar(0)).toBe(RECHAZOS_CANCELACION.fueraDePlazo);
+        expect(cancelar(-90)).toBe(RECHAZOS_CANCELACION.fueraDePlazo);
+    });
+
+    it('una reserva cancelada dice "ya fue cancelada", aunque la clase esté lejos o por empezar', () => {
+        for (const estado of ['CANCELADA_MIEMBRO', 'CANCELADA_GIMNASIO']) {
+            expect(cancelar(600, estado)).toBe(RECHAZOS_CANCELACION.yaCancelada);
+            expect(cancelar(30, estado)).toBe(RECHAZOS_CANCELACION.yaCancelada);
+        }
+    });
+
+    it('usa los mensajes del criterio de H6', () => {
+        expect(RECHAZOS_CANCELACION).toEqual({
+            yaCancelada: 'Esta reserva ya fue cancelada',
+            fueraDePlazo: 'Solo puedes cancelar hasta 2 horas antes del inicio de la clase',
         });
     });
 });

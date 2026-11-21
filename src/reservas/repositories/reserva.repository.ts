@@ -161,4 +161,63 @@ export class ReservaRepository {
     crear(tx: Tx, datos: { claseId: string; miembroId: string; membresiaId: string }): Promise<Reserva> {
         return tx.reserva.create({ data: datos });
     }
+
+    // ------------------------------------------------------------------
+    // BE-6.1 · Cancelación de una reserva por el miembro (H6).
+    // ------------------------------------------------------------------
+
+    /** Reserva con su dueño y los datos de la clase que necesita la cancelación, o null si no existe. */
+    async findParaCancelar(reservaId: string): Promise<ReservaParaCancelar | null> {
+        const reserva = await this.prisma.reserva.findUnique({
+            where: { id: reservaId },
+            select: {
+                id: true,
+                estado: true,
+                claseId: true,
+                miembro: { select: { usuarioId: true } },
+                clase: { select: { inicio: true, cupoMaximo: true } },
+            },
+        });
+        if (!reserva) return null;
+        return {
+            id: reserva.id,
+            estado: reserva.estado,
+            claseId: reserva.claseId,
+            usuarioId: reserva.miembro.usuarioId,
+            inicioClase: reserva.clase.inicio,
+            cupoMaximo: reserva.clase.cupoMaximo,
+        };
+    }
+
+    /**
+     * Pasa la reserva a CANCELADA_MIEMBRO solo si sigue CONFIRMADA y su clase
+     * empieza en `limite` o después (ahora + 2 horas). La condición va en el
+     * mismo UPDATE, así que dos cancelaciones simultáneas no se aplican dos
+     * veces. El lugar y el crédito se liberan solos: ambos se calculan contando
+     * las reservas CONFIRMADA.
+     *
+     * @returns true si se canceló; false si otra petición la cambió primero o ya no está en plazo.
+     */
+    async cancelarConfirmada(tx: Tx, reservaId: string, limite: Date, ahora: Date): Promise<boolean> {
+        const { count } = await tx.reserva.updateMany({
+            where: {
+                id: reservaId,
+                estado: EstadoReserva.CONFIRMADA,
+                clase: { inicio: { gte: limite } },
+            },
+            data: { estado: EstadoReserva.CANCELADA_MIEMBRO, canceladaEn: ahora },
+        });
+        return count === 1;
+    }
+}
+
+/** Lo que BE-6.1 necesita de una reserva para decidir si se puede cancelar. */
+export interface ReservaParaCancelar {
+    id: string;
+    estado: EstadoReserva;
+    claseId: string;
+    /** Usuario dueño de la reserva (el de la ficha de miembro), para comparar con el token. */
+    usuarioId: string;
+    inicioClase: Date;
+    cupoMaximo: number;
 }

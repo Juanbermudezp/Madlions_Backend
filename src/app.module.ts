@@ -6,6 +6,7 @@ import { JwtAuthGuard, RolesGuard } from '@Auth/guards';
 import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
+import { AvisosModule } from '@Avisos';
 import { validateEnv } from '@Config';
 import { ProgresoModule } from './progreso/progreso.module.js';
 import { BloquesModule } from '@Bloques';
@@ -22,6 +23,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { RutinasModule } from './rutinas/index.js';
 import { ReservasModule } from '@Reservas';
 import { ReportesModule } from '@Reportes';
+import { EstadisticasModule } from '@Estadisticas';
 import { ResenasModule } from '@Resenas';
 import { MaquinasModule } from '@Maquinas';
 import { AsistenciaModule } from '@Asistencia';
@@ -36,6 +38,7 @@ import { AsistenciaModule } from '@Asistencia';
     PrismaModule,
     HealthModule,
     UsersModule,
+    AvisosModule,
     AuthModule,
     ClasesModule,
     BloquesModule,
@@ -52,6 +55,7 @@ import { AsistenciaModule } from '@Asistencia';
     RutinasModule,
     ReservasModule,
     ReportesModule,
+    EstadisticasModule,
     ResenasModule,
     MaquinasModule,
     AsistenciaModule,
