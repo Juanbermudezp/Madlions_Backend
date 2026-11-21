@@ -11,7 +11,8 @@ import {
 import { aFechaLocal, hoyLocal, sumarDias } from '../src/common/fechas/fechas.js';
 import { cargarMembresiasDePrueba } from './seed-membresias.js';
 
-const PASSWORD = 'Demo1234!';
+// En producción la contraseña se pasa con SEED_PASSWORD para que no quede en el repo
+const PASSWORD = process.env.SEED_PASSWORD || 'Demo1234!';
 
 interface UsuarioSeed {
   email: string;
