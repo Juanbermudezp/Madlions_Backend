@@ -9,17 +9,34 @@ import {
     ApiTags,
     ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Roles } from '@Auth/decorators';
-import { DetalleIngresosQueryDto, DetalleIngresosResponseDto, RangoReporteQueryDto, ReporteIngresosResponseDto, ReporteOcupacionResponseDto, ReporteRenovacionResponseDto } from '@Reportes/dto';
-import { ReportesService } from '@Reportes/services';
-import { Rol } from '@PrismaClient';
+import { CurrentUser, Roles } from '@Auth/decorators';
+import { DesempenoQueryDto, DetalleIngresosQueryDto, DetalleIngresosResponseDto, RangoReporteQueryDto, ReporteDesempenoResponseDto, ReporteIngresosResponseDto, ReporteOcupacionResponseDto, ReporteRenovacionResponseDto } from '@Reportes/dto';
+import { ReportesDesempenoService, ReportesService } from '@Reportes/services';
+import { Rol, type User } from '@PrismaClient';
 
-/** Reportes del Módulo 10. Solo el administrador (H29 abrirá "Mi desempeño" al entrenador). */
+/** Reportes del Módulo 10. Solo el administrador, salvo "Mi desempeño" (H29), que también abre el entrenador. */
 @ApiTags('reportes')
 @ApiBearerAuth()
 @Controller('reportes')
 export class ReportesController {
-    constructor(private readonly reportesService: ReportesService) { }
+    constructor(
+        private readonly reportesService: ReportesService,
+        private readonly desempenoService: ReportesDesempenoService,
+    ) { }
+
+    @Get('desempeno')
+    @Roles(Rol.ADMINISTRADOR, Rol.ENTRENADOR)
+    @ApiOperation({
+        summary: 'Desempeño por entrenador: clases impartidas, ocupación, sesiones realizadas y calificación (H29)',
+        description: 'Un entrenador solo recibe sus propias métricas: se ignora entrenadorId.',
+    })
+    @ApiOkResponse({ type: ReporteDesempenoResponseDto })
+    @ApiBadRequestResponse({ description: 'Fechas inválidas, inicio posterior al fin, rango superior a 12 meses o entrenador inválido.' })
+    @ApiUnauthorizedResponse({ description: 'Sin sesión.' })
+    @ApiForbiddenResponse({ description: 'El usuario no es administrador ni entrenador.' })
+    desempeno(@CurrentUser() user: User, @Query() query: DesempenoQueryDto): Promise<ReporteDesempenoResponseDto> {
+        return this.desempenoService.desempeno(user, query);
+    }
 
     @Get('renovacion')
     @Roles(Rol.ADMINISTRADOR)
