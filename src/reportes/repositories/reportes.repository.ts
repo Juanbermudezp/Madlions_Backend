@@ -10,6 +10,15 @@ export interface FilaIngreso {
     total: Prisma.Decimal;
 }
 
+export interface FilaRenovacion {
+    id: string;
+    nombre: string;
+    codigo: string;
+    plan: string;
+    fechaVencimiento: string;
+    renovada: boolean;
+}
+
 const SELECT_PAGO_INGRESO = {
     id: true, pagadoEn: true, monto: true,
     miembro: { select: { codigoMiembro: true, usuario: { select: { nombre: true, apellido: true } } } },
@@ -33,6 +42,42 @@ export interface FilaOcupacion {
 @Injectable()
 export class ReportesRepository {
     constructor(private readonly prisma: PrismaService) { }
+
+    /** H28: una fila por membresía original, un único snapshot de lectura.
+     * Las DATE son días calendario (no se restan 6 horas). Solo pagado_en es
+     * timestamp UTC: [vencimiento 06Z, vencimiento+8 días 06Z) cubre días 0..7.
+     * No hay relación Prisma directa entre membresía y cobro: enlace polimórfico
+     * por referencia_tipo/id y dueño. EXISTS evita multiplicar por renovaciones.
+     */
+    renovacion(desde: string, hasta: string, ahora: Date): Promise<FilaRenovacion[]> {
+        return this.prisma.$queryRaw<FilaRenovacion[]>`
+            SELECT m.id, u.nombre || ' ' || u.apellido AS nombre,
+                   mi.codigo_miembro AS codigo, m.nombre_plan AS plan,
+                   to_char(m.fecha_vencimiento, 'YYYY-MM-DD') AS "fechaVencimiento",
+                   EXISTS (
+                       SELECT 1 FROM membresia r
+                       JOIN cobro cr ON cr.referencia_tipo = 'MEMBRESIA'
+                         AND cr.referencia_id = r.id AND cr.miembro_id = r.miembro_id
+                         AND cr.concepto = 'RENOVACION' AND cr.estado = 'PAGADO'
+                       WHERE r.membresia_anterior_id = m.id AND r.miembro_id = m.miembro_id
+                         AND r.tipo_operacion = 'RENOVACION' AND r.estado = 'PAGADA'
+                         AND cr.pagado_en >= m.fecha_vencimiento::timestamp + INTERVAL '6 hours'
+                         AND cr.pagado_en < (m.fecha_vencimiento + 8)::timestamp + INTERVAL '6 hours'
+                         AND cr.pagado_en <= ${ahora}
+                   ) AS renovada
+            FROM membresia m
+            JOIN miembro mi ON mi.id = m.miembro_id
+            JOIN usuario u ON u.id = mi.usuario_id
+            WHERE m.estado = 'PAGADA' AND m.tipo_plan IN ('MENSUAL', 'SET_CLASES')
+              AND m.fecha_vencimiento >= ${desde}::date AND m.fecha_vencimiento <= ${hasta}::date
+              AND EXISTS (
+                  SELECT 1 FROM cobro c WHERE c.referencia_tipo = 'MEMBRESIA'
+                    AND c.referencia_id = m.id AND c.miembro_id = m.miembro_id
+                    AND c.concepto IN ('MEMBRESIA', 'RENOVACION') AND c.estado = 'PAGADO'
+                    AND c.pagado_en <= ${ahora}
+              )
+            ORDER BY m.fecha_vencimiento DESC, m.id ASC`;
+    }
 
     /** BE-27.1: una consulta/snapshot para ambos períodos. No se unen intentos
      * ni comprobantes (un cobro cuenta una vez). Membresia.id es único y su
