@@ -6,7 +6,7 @@ import { JwtAuthGuard, RolesGuard } from '@Auth/guards';
 import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
-import { AvisosModule } from '@Avisos';
+import { AvisosModule, AvisosVencimientoModule } from '@Avisos';
 import { validateEnv } from '@Config';
 import { ProgresoModule } from './progreso/progreso.module.js';
 import { BloquesModule } from '@Bloques';
@@ -39,6 +39,7 @@ import { AsistenciaModule } from '@Asistencia';
     HealthModule,
     UsersModule,
     AvisosModule,
+    AvisosVencimientoModule,
     AuthModule,
     ClasesModule,
     BloquesModule,
