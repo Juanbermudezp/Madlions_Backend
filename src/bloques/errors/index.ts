@@ -1,0 +1,1 @@
+export * from './horario-ocupado.error.js';

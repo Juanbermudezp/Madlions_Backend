@@ -1,7 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { IsNormalizedEmail } from '@Common/decorators';
 
+const trim = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
+
+/**
+ * Registro público. No tiene campo `rol`: con `forbidNonWhitelisted`, una
+ * petición que intente mandarlo se rechaza con 400, así nadie puede
+ * registrarse como entrenador o administrador.
+ */
 export class CreateUserDto {
   @ApiProperty({
     description: 'Email del usuario. Se normaliza a minúsculas y sin espacios.',
@@ -26,4 +35,24 @@ export class CreateUserDto {
     message: 'La contraseña debe incluir al menos una minúscula, una mayúscula y un número.',
   })
   password!: string;
+
+  @ApiProperty({ example: 'María', minLength: 2, maxLength: 50 })
+  @Transform(trim)
+  @IsString()
+  @MinLength(2, { message: 'El nombre debe tener entre 2 y 50 caracteres.' })
+  @MaxLength(50, { message: 'El nombre debe tener entre 2 y 50 caracteres.' })
+  nombre!: string;
+
+  @ApiProperty({ example: 'López', minLength: 2, maxLength: 50 })
+  @Transform(trim)
+  @IsString()
+  @MinLength(2, { message: 'El apellido debe tener entre 2 y 50 caracteres.' })
+  @MaxLength(50, { message: 'El apellido debe tener entre 2 y 50 caracteres.' })
+  apellido!: string;
+
+  @ApiProperty({ example: '70001234', description: '8 dígitos, sin guion.' })
+  @Transform(trim)
+  @IsString()
+  @Matches(/^\d{8}$/, { message: 'El teléfono debe tener 8 dígitos.' })
+  telefono!: string;
 }

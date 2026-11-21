@@ -1,0 +1,164 @@
+# QA-15.1 — PLANTILLA NO EJECUTADA.
+# No usar "Send All": hay fases con distintas precondiciones y escrituras.
+# Requiere QA aislado preparado y autorización expresa antes de POST/PUT/login.
+# Variables en memoria o almacén privado del cliente HTTP, nunca valores en Git:
+# QA_H15_BASE_URL (incluye /api/v1), QA_H15_RUN_ID,
+# QA_H15_TOKEN_ENTRENADOR, QA_H15_TOKEN_A, QA_H15_TOKEN_B,
+# QA_H15_MIEMBRO_A, QA_H15_MIEMBRO_B (UUID de fichas, no de usuarios),
+# QA_H15_RUTINA_A1, QA_H15_RUTINA_A2, QA_H15_RUTINA_B1 (copiados de POST),
+# QA_H15_FECHA_ANTERIOR y QA_H15_FECHA_RECIENTE (hoy/futuro, anterior < reciente),
+# QA_H15_ID_INEXISTENTE (UUID verificado inexistente),
+# QA_H15_EMAIL, QA_H15_PASSWORD (cuenta ficticia a autenticar).
+
+### Fase 0: autenticar cada cuenta QA; 200. Guardar accessToken solo en memoria.
+# Login escribe refresh_tokens; también requiere autorización del entorno.
+POST {{QA_H15_BASE_URL}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{QA_H15_EMAIL}}",
+  "password": "{{QA_H15_PASSWORD}}"
+}
+
+### Confirmar identidad de cada token (repetir con A/B); 200, rol esperado.
+GET {{QA_H15_BASE_URL}}/auth/me
+Authorization: Bearer {{QA_H15_TOKEN_ENTRENADOR}}
+
+### Fase 1: entrenador asigna A1 a A; 201. Copiar id a QA_H15_RUTINA_A1.
+POST {{QA_H15_BASE_URL}}/rutinas
+Authorization: Bearer {{QA_H15_TOKEN_ENTRENADOR}}
+Content-Type: application/json
+
+{
+  "miembroId": "{{QA_H15_MIEMBRO_A}}",
+  "nombre": "QA H15 A1 {{QA_H15_RUN_ID}}",
+  "objetivo": "Verificar detalle y reemplazo completo",
+  "fechaInicio": "{{QA_H15_FECHA_RECIENTE}}",
+  "dias": [
+    { "nombre": "Pecho", "ejercicios": [
+      { "nombre": "Press banca", "series": 4, "repeticiones": 8, "descansoSeg": 120 },
+      { "nombre": "Extension triceps", "series": 3, "repeticiones": 12, "descansoSeg": 60 }
+    ] },
+    { "nombre": "Piernas", "ejercicios": [
+      { "nombre": "Sentadilla", "series": 4, "repeticiones": 8, "descansoSeg": 180 }
+    ] }
+  ]
+}
+
+### Entrenador asigna A2 a A; 201. Fecha inferior a A1, copiado a QA_H15_RUTINA_A2.
+POST {{QA_H15_BASE_URL}}/rutinas
+Authorization: Bearer {{QA_H15_TOKEN_ENTRENADOR}}
+Content-Type: application/json
+
+{
+  "miembroId": "{{QA_H15_MIEMBRO_A}}",
+  "nombre": "QA H15 A2 {{QA_H15_RUN_ID}}",
+  "objetivo": "Verificar listado y orden descendente",
+  "fechaInicio": "{{QA_H15_FECHA_ANTERIOR}}",
+  "dias": [{ "nombre": "Movilidad", "ejercicios": [
+    { "nombre": "Movilidad cadera", "series": 2, "repeticiones": 10, "descansoSeg": 0 }
+  ] }]
+}
+
+### QA-H15-01: 200, exactamente [A1,A2], entrenador y fechas; sin miembroId en URL.
+GET {{QA_H15_BASE_URL}}/rutinas/mias
+Authorization: Bearer {{QA_H15_TOKEN_A}}
+
+### QA-H15-02/03: original; 200, dos días y tres ejercicios. Guardar IDs sin tokens.
+GET {{QA_H15_BASE_URL}}/rutinas/{{QA_H15_RUTINA_A1}}
+Authorization: Bearer {{QA_H15_TOKEN_A}}
+
+### QA-H15-04: ANTES de crear B1, 200 y []. UI: No tienes rutinas asignadas.
+GET {{QA_H15_BASE_URL}}/rutinas/mias
+Authorization: Bearer {{QA_H15_TOKEN_B}}
+
+### Fase 2, QA-H15-03: entrenador reemplaza A1; 200. No enviar miembroId en PUT.
+PUT {{QA_H15_BASE_URL}}/rutinas/{{QA_H15_RUTINA_A1}}
+Authorization: Bearer {{QA_H15_TOKEN_ENTRENADOR}}
+Content-Type: application/json
+
+{
+  "nombre": "QA H15 A1 revisada {{QA_H15_RUN_ID}}",
+  "objetivo": "Verificar lectura posterior a la edicion",
+  "fechaInicio": "{{QA_H15_FECHA_RECIENTE}}",
+  "dias": [{ "nombre": "Posterior", "ejercicios": [
+    { "nombre": "Peso muerto", "series": 5, "repeticiones": 6, "descansoSeg": 180 }
+  ] }]
+}
+
+### 200; un día, Peso muerto/5/6/180. No Press banca, Extension triceps ni Sentadilla.
+GET {{QA_H15_BASE_URL}}/rutinas/{{QA_H15_RUTINA_A1}}
+Authorization: Bearer {{QA_H15_TOKEN_A}}
+
+### Listado también debe mostrar nombre actualizado, manteniendo orden A1/A2; 200.
+GET {{QA_H15_BASE_URL}}/rutinas/mias
+Authorization: Bearer {{QA_H15_TOKEN_A}}
+
+### Fase 3: crear B1 SOLO después de completar QA-H15-04; 201, guardar UUID real.
+POST {{QA_H15_BASE_URL}}/rutinas
+Authorization: Bearer {{QA_H15_TOKEN_ENTRENADOR}}
+Content-Type: application/json
+
+{
+  "miembroId": "{{QA_H15_MIEMBRO_B}}",
+  "nombre": "QA H15 B1 {{QA_H15_RUN_ID}}",
+  "objetivo": "Dato reservado al miembro B",
+  "fechaInicio": "{{QA_H15_FECHA_RECIENTE}}",
+  "dias": [{ "nombre": "Espalda", "ejercicios": [
+    { "nombre": "Remo", "series": 3, "repeticiones": 10, "descansoSeg": 90 }
+  ] }]
+}
+
+### QA-H15-05: A sigue recibiendo SOLO A1/A2, nunca B1; 200.
+GET {{QA_H15_BASE_URL}}/rutinas/mias
+Authorization: Bearer {{QA_H15_TOKEN_A}}
+
+### B recibe SOLO B1; 200.
+GET {{QA_H15_BASE_URL}}/rutinas/mias
+Authorization: Bearer {{QA_H15_TOKEN_B}}
+
+### A abre B1; 403, sin nombre, objetivo, entrenador ni ejercicios de B en cuerpo.
+GET {{QA_H15_BASE_URL}}/rutinas/{{QA_H15_RUTINA_B1}}
+Authorization: Bearer {{QA_H15_TOKEN_A}}
+
+### B abre B1; 200. Confirma que el caso anterior es rutina existente, no 404.
+GET {{QA_H15_BASE_URL}}/rutinas/{{QA_H15_RUTINA_B1}}
+Authorization: Bearer {{QA_H15_TOKEN_B}}
+
+### Intento de suplantación: 200 SOLO A1/A2, ignora miembroId ajeno.
+GET {{QA_H15_BASE_URL}}/rutinas/mias?miembroId={{QA_H15_MIEMBRO_B}}
+Authorization: Bearer {{QA_H15_TOKEN_A}}
+
+### Intento de suplantación del detalle: 403, tampoco autoriza query ajena.
+GET {{QA_H15_BASE_URL}}/rutinas/{{QA_H15_RUTINA_B1}}?miembroId={{QA_H15_MIEMBRO_B}}
+Authorization: Bearer {{QA_H15_TOKEN_A}}
+
+### UUID inexistente; 404 (confirmar que no existe en QA).
+GET {{QA_H15_BASE_URL}}/rutinas/{{QA_H15_ID_INEXISTENTE}}
+Authorization: Bearer {{QA_H15_TOKEN_A}}
+
+### UUID inválido; 400.
+GET {{QA_H15_BASE_URL}}/rutinas/no-es-uuid
+Authorization: Bearer {{QA_H15_TOKEN_A}}
+
+### Sin autenticación; 401.
+GET {{QA_H15_BASE_URL}}/rutinas/mias
+
+### Sin autenticación en detalle; 401.
+GET {{QA_H15_BASE_URL}}/rutinas/{{QA_H15_RUTINA_A1}}
+
+### Rol ENTRENADOR en listado propio de miembro; 403.
+GET {{QA_H15_BASE_URL}}/rutinas/mias
+Authorization: Bearer {{QA_H15_TOKEN_ENTRENADOR}}
+
+### Rol ENTRENADOR en detalle de miembro; 403.
+GET {{QA_H15_BASE_URL}}/rutinas/{{QA_H15_RUTINA_A1}}
+Authorization: Bearer {{QA_H15_TOKEN_ENTRENADOR}}
+
+### Regresión H14: entrenador conserva su listado; 200.
+GET {{QA_H15_BASE_URL}}/rutinas/creadas-por-mi
+Authorization: Bearer {{QA_H15_TOKEN_ENTRENADOR}}
+
+### Regresión H14: miembro no obtiene ese listado; 403.
+GET {{QA_H15_BASE_URL}}/rutinas/creadas-por-mi
+Authorization: Bearer {{QA_H15_TOKEN_A}}

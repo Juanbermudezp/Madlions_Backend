@@ -30,17 +30,185 @@ datasource db {
   provider = "postgresql"
 }
 
+/// Roles del sistema (Módulo 0). Solo se aceptan estos cuatro valores.
+enum Rol {
+  MIEMBRO
+  ENTRENADOR
+  RECEPCION
+  ADMINISTRADOR
+
+  @@map("rol")
+}
+
+enum EstadoBloque {
+  DISPONIBLE
+  OCUPADO
+
+  @@map("estado_bloque")
+}
+
+enum EstadoClase {
+  PROGRAMADA
+  CANCELADA_GIMNASIO
+
+  @@map("estado_clase")
+}
+
+/// Estado de una reserva de clase (H5). Los dos estados de cancelación son
+/// finales: CANCELADA_MIEMBRO la pone H6 y CANCELADA_GIMNASIO la pone H7.
+enum EstadoReserva {
+  CONFIRMADA
+  CANCELADA_MIEMBRO
+  CANCELADA_GIMNASIO
+
+  @@map("estado_reserva")
+}
+
+/// Asistencia a una reserva; la registra el entrenador en H19. Tiene los mismos
+/// valores que la asistencia de las sesiones personales (H9), pero es un enum
+/// propio para que H5 y H9 no se pisen en el schema.
+enum AsistenciaReserva {
+  SIN_REGISTRAR
+  ASISTIO
+  NO_ASISTIO
+
+  @@map("asistencia_reserva")
+}
+
+/// Módulo que genera un aviso (Módulo 9). SESIONES y PAGOS quedan disponibles
+/// para avisos futuros.
+enum ModuloOrigen {
+  MEMBRESIAS
+  CLASES
+  SESIONES
+  PAGOS
+
+  @@map("modulo_origen")
+}
+
+/// Estado de lectura de un aviso: el servicio lo crea NO_LEIDO y pasa a LEIDO
+/// cuando el miembro lo abre o marca todos como leídos (H23).
+enum EstadoAviso {
+  NO_LEIDO
+  LEIDO
+
+  @@map("estado_aviso")
+}
+
+/// Cuenta de acceso de cualquier persona del sistema.
+///
+/// Las restricciones que Prisma no puede expresar (largo mínimo del nombre y
+/// del apellido, formato del teléfono) viven como CHECK en la migración.
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
   passwordHash String   @map("password_hash")
-  isActive     Boolean  @default(true) @map("is_active")
+  nombre       String   @db.VarChar(50)
+  apellido     String   @db.VarChar(50)
+  telefono     String   @db.Char(8)
+  rol          Rol      @default(MIEMBRO)
+  isActive     Boolean  @default(true) @map("activo")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
+  miembro       Miembro?
+  bloquesDisponibilidad BloqueDisponibilidad[]
+  clases                Clase[] @relation("ClaseEntrenador")
+  clasesCanceladas      Clase[] @relation("ClaseCanceladaPor")
+  membresiasRegistradas Membresia[]
+  accesosRegistrados    RegistroAcceso[] @relation("AccesoRegistradoPor")
+  salidasRegistradas    RegistroAcceso[] @relation("AccesoSalidaRegistradaPor")
+  sesionesPersonales    SesionPersonal[] @relation("SesionDelEntrenador")
+  asistenciasReservaRegistradas Reserva[]
+  asistenciasSesionRegistradas  SesionPersonal[] @relation("AsistenciaSesionRegistrada")
+  resenasRecibidas      Resena[]
+  rutinasCreadas        Rutina[]
+  maquinasActualizadas  Maquina[]
+  cambiosDeEstadoMaquina HistorialMaquina[]
 
-  @@map("users")
+  @@map("usuario")
+}
+
+/// Ficha de un miembro del gimnasio. Cada ficha pertenece a un único usuario.
+///
+/// `codigoMiembro` lo genera el servidor a partir de la secuencia
+/// `miembro_codigo_seq` (MBR-000001, MBR-000002, ...). Los formatos del DUI y
+/// del código se validan con CHECK en la migración.
+model Miembro {
+  id            String   @id @default(uuid()) @db.Uuid
+  usuarioId     String   @unique @map("usuario_id") @db.Uuid
+  usuario       User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  documento     String   @unique @db.Char(10)
+  codigoMiembro String   @unique @map("codigo_miembro") @db.Char(10)
+  createdAt     DateTime @default(now()) @map("created_at")
+  registrosProgreso RegistroProgreso[] 
+
+  avisos Aviso[]
+  membresias Membresia[]
+  cobros Cobro[]
+  registrosAcceso RegistroAcceso[]
+  sesionesPersonales SesionPersonal[]
+  reservas Reserva[]
+  resenas Resena[]
+
+  rutinas Rutina[]
+
+  @@map("miembro")
+}
+
+/// H14: rutina asignada a un miembro y creada por un entrenador.
+/// Los CHECK de textos no vacíos viven en la migración DB-14.1.
+/// actualizadoEn lo mantiene Prisma (@updatedAt), como en Plan.
+/// BE-14 debe validar el rol ENTRENADOR y crear al menos un día con ejercicios
+/// en una transacción; las FK no autorizan usuarios ni garantizan hijos mínimos.
+model Rutina {
+  id            String   @id @default(uuid()) @db.Uuid
+  miembroId     String   @map("miembro_id") @db.Uuid
+  miembro       Miembro  @relation(fields: [miembroId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  entrenadorId  String   @map("entrenador_id") @db.Uuid
+  entrenador    User     @relation(fields: [entrenadorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  nombre        String   @db.VarChar(60)
+  objetivo      String   @db.VarChar(200)
+  fechaInicio   DateTime @map("fecha_inicio") @db.Date
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  dias RutinaDia[]
+
+  @@index([miembroId, fechaInicio])
+  @@index([entrenadorId, miembroId])
+  @@map("rutina")
+}
+
+/// El orden único y el CHECK 1..7 limitan a siete días por rutina.
+model RutinaDia {
+  id       String @id @default(uuid()) @db.Uuid
+  rutinaId String @map("rutina_id") @db.Uuid
+  rutina   Rutina @relation(fields: [rutinaId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  orden    Int
+  nombre   String @db.VarChar(40)
+
+  ejercicios RutinaEjercicio[]
+
+  @@unique([rutinaId, orden])
+  @@map("rutina_dia")
+}
+
+/// CHECK manuales: orden 1..15, series 1..10, repeticiones 1..50,
+/// descanso 0..600 y nombre no vacío. Orden único por día.
+model RutinaEjercicio {
+  id           String    @id @default(uuid()) @db.Uuid
+  diaId        String    @map("dia_id") @db.Uuid
+  dia          RutinaDia @relation(fields: [diaId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  orden        Int
+  nombre       String    @db.VarChar(60)
+  series       Int
+  repeticiones Int
+  descansoSeg  Int       @map("descanso_seg")
+
+  @@unique([diaId, orden])
+  @@map("rutina_ejercicio")
 }
 
 model RefreshToken {
@@ -59,4 +227,583 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model BloqueDisponibilidad {
+  id           String       @id @default(uuid()) @db.Uuid
+  entrenadorId String       @map("entrenador_id") @db.Uuid
+  entrenador   User         @relation(fields: [entrenadorId], references: [id])
+  inicio       DateTime
+  fin          DateTime
+  duracionMin  Int          @map("duracion_min")
+  estado       EstadoBloque @default(DISPONIBLE)
+  creadoEn     DateTime     @default(now()) @map("creado_en")
+  sesion       SesionPersonal?
+
+  @@index([entrenadorId, inicio])
+  @@map("bloque_disponibilidad")
+}
+
+/// Catálogo de tipos de clase grupal (Yoga, Spinning, Crossfit...). Lo
+/// administra el administrador (H4) y lo usan los planes (H1).
+///
+/// El largo mínimo del nombre (2 caracteres) vive como CHECK en la migración.
+model TipoClase {
+  id          String   @id @default(uuid()) @db.Uuid
+  nombre      String   @unique @db.VarChar(40)
+  descripcion String   @db.VarChar(300)
+  activo      Boolean  @default(true)
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  clases Clase[]
+  planes PlanTipoClase[]
+  membresias MembresiaTipoClase[]
+  resenas Resena[]
+
+  @@map("tipo_clase")
+}
+
+/// Clase grupal programada (H4). La creó H8 en su forma mínima para validar
+/// traslapes y H4 la amplía. Los CHECK de horario (fin > inicio) y de cupo
+/// (1 a 50) viven en las migraciones.
+model Clase {
+  id           String      @id @default(uuid()) @db.Uuid
+  tipoClaseId  String      @map("tipo_clase_id") @db.Uuid
+  tipoClase    TipoClase   @relation(fields: [tipoClaseId], references: [id])
+  entrenadorId String      @map("entrenador_id") @db.Uuid
+  entrenador   User        @relation("ClaseEntrenador", fields: [entrenadorId], references: [id])
+  descripcion  String?     @db.VarChar(300)
+  inicio       DateTime
+  fin          DateTime
+  cupoMaximo   Int         @map("cupo_maximo")
+  estado       EstadoClase @default(PROGRAMADA)
+  /// Los tres campos son obligatorios solo en CANCELADA_GIMNASIO (CHECK SQL).
+  motivoCancelacion String? @map("motivo_cancelacion") @db.VarChar(250)
+  canceladaEn       DateTime? @map("cancelada_en") @db.Timestamp(3)
+  canceladaPorId    String? @map("cancelada_por_id") @db.Uuid
+  canceladaPor      User? @relation("ClaseCanceladaPor", fields: [canceladaPorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  creadoEn     DateTime    @default(now()) @map("creado_en")
+
+  reservas Reserva[]
+
+  @@index([entrenadorId, inicio])
+  @@index([inicio])
+  @@map("clase")
+}
+
+/// Aviso de un miembro (Módulo 9, H22). Lo registra únicamente AvisosService;
+/// no hay endpoint para crearlos.
+///
+/// Deduplicación: el índice único (miembro_id, referencia) impide repetir un
+/// aviso con la misma referencia para el mismo miembro. Los avisos sin
+/// referencia (NULL) no chocan entre sí, porque PostgreSQL trata cada NULL como
+/// distinto en un índice único: se comporta como el índice parcial que pide
+/// DB-22.1 sin necesitar la preview `partialIndexes`.
+///
+/// Las restricciones que Prisma no puede expresar (título y mensaje no vacíos,
+/// estado coherente con leido_en) viven como CHECK en la migración.
+model Aviso {
+  id           String       @id @default(uuid()) @db.Uuid
+  miembroId    String       @map("miembro_id") @db.Uuid
+  miembro      Miembro      @relation(fields: [miembroId], references: [id], onDelete: Cascade)
+  titulo       String       @db.VarChar(100)
+  mensaje      String       @db.VarChar(500)
+  moduloOrigen ModuloOrigen @map("modulo_origen")
+  referencia   String?      @db.VarChar(100)
+  estado       EstadoAviso  @default(NO_LEIDO)
+  creadoEn     DateTime     @default(now()) @map("creado_en")
+  leidoEn      DateTime?    @map("leido_en")
+
+  @@unique([miembroId, referencia])
+  @@index([miembroId, creadoEn])
+  @@index([miembroId, estado])
+  @@map("aviso")
+}
+
+
+enum TipoProgreso {
+  PESO
+  CINTURA
+  CADERA
+  PECHO
+  BRAZO
+  MUSLO
+  MARCA
+
+  @@map("tipo_progreso")
+}
+
+model RegistroProgreso {
+  id           String       @id @default(uuid()) @db.Uuid
+  miembroId    String       @map("miembro_id") @db.Uuid
+  miembro      Miembro      @relation(fields: [miembroId], references: [id], onDelete: Cascade)
+
+  fecha        DateTime     @db.Date
+  tipo         TipoProgreso
+  valor        Decimal      @db.Decimal(5, 1)
+  ejercicio    String?      @db.VarChar(60)
+  repeticiones Int?
+  creadoEn     DateTime     @default(now()) @map("creado_en")
+
+  @@index([miembroId, fecha])
+  @@map("registro_progreso")
+}
+
+/// Tipos de plan que vende el gimnasio (H1).
+enum TipoPlan {
+  DAYPASS
+  MENSUAL
+  SET_CLASES
+
+  @@map("tipo_plan")
+}
+
+/// Plan que vende el gimnasio (H1).
+///
+/// Las restricciones que Prisma no puede expresar viven como CHECK en la
+/// migración: precio mayor que 0, cantidad_clases entre 1 y 100 solo en
+/// SET_CLASES (nula en los demás) y duracion_dias de 1 en DAYPASS y 30 en los
+/// demás.
+model Plan {
+  id             String   @id @default(uuid()) @db.Uuid
+  nombre         String   @unique @db.VarChar(60)
+  tipo           TipoPlan
+  precio         Decimal  @db.Decimal(10, 2)
+  cantidadClases Int?     @map("cantidad_clases")
+  duracionDias   Int      @map("duracion_dias")
+  beneficios     String   @db.VarChar(500)
+  activo         Boolean  @default(true)
+  creadoEn       DateTime @default(now()) @map("creado_en")
+  actualizadoEn  DateTime @updatedAt @map("actualizado_en")
+
+  tiposClase PlanTipoClase[]
+  membresias Membresia[]
+
+  @@map("plan")
+}
+
+/// Tipos de clase que incluye un plan (H1).
+model PlanTipoClase {
+  planId      String    @map("plan_id") @db.Uuid
+  plan        Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  tipoClaseId String    @map("tipo_clase_id") @db.Uuid
+  tipoClase   TipoClase @relation(fields: [tipoClaseId], references: [id])
+
+  @@id([planId, tipoClaseId])
+  @@map("plan_tipo_clase")
+}
+
+/// Parámetros generales del sistema como pares clave-valor (H1). La migración
+/// carga la fila inicial precio_clase_puntual = 10.00.
+model Configuracion {
+  clave         String   @id @db.VarChar(50)
+  valor         String   @db.VarChar(100)
+  actualizadoEn DateTime @default(now()) @updatedAt @map("actualizado_en")
+
+  @@map("configuracion")
+}
+
+enum EstadoSesion {
+  AGENDADA
+
+  @@map("estado_sesion")
+}
+
+enum AsistenciaSesion {
+  SIN_REGISTRAR
+  ASISTIO
+  NO_ASISTIO
+
+  @@map("asistencia_sesion")
+}
+
+model SesionPersonal {
+  id           String               @id @default(uuid()) @db.Uuid
+  bloqueId     String               @unique @map("bloque_id") @db.Uuid
+  bloque       BloqueDisponibilidad @relation(fields: [bloqueId], references: [id])
+  miembroId    String               @map("miembro_id") @db.Uuid
+  miembro      Miembro              @relation(fields: [miembroId], references: [id])
+  entrenadorId String               @map("entrenador_id") @db.Uuid
+  entrenador   User                 @relation("SesionDelEntrenador", fields: [entrenadorId], references: [id])
+  inicio       DateTime
+  fin          DateTime
+  precio       Decimal              @db.Decimal(10, 2)
+  cobroId      String?              @unique @map("cobro_id") @db.Uuid
+  cobro        Cobro?               @relation(fields: [cobroId], references: [id], onDelete: Restrict)
+  estado       EstadoSesion         @default(AGENDADA)
+  asistencia   AsistenciaSesion     @default(SIN_REGISTRAR)
+  /// Quién y cuándo registró la asistencia (H19), igual que en la reserva.
+  asistenciaRegistradaPorId String?   @map("asistencia_registrada_por") @db.Uuid
+  asistenciaRegistradaPor   User?     @relation("AsistenciaSesionRegistrada", fields: [asistenciaRegistradaPorId], references: [id])
+  asistenciaRegistradaEn    DateTime? @map("asistencia_registrada_en")
+  creadaEn     DateTime             @default(now()) @map("creada_en")
+
+  resena Resena?
+
+  @@index([miembroId, inicio])
+  @@index([entrenadorId, inicio])
+  @@map("sesion_personal")
+}
+
+/// Tipo de máquina del inventario (H17).
+enum TipoMaquina {
+  CARDIO
+  FUERZA
+  PESO_LIBRE
+  FUNCIONAL
+
+  @@map("tipo_maquina")
+}
+
+/// Zona del gimnasio donde está la máquina (H17).
+enum ZonaMaquina {
+  PISO_1
+  PISO_2
+  AREA_FUNCIONAL
+
+  @@map("zona_maquina")
+}
+
+/// Estado operativo de una máquina (H17). Lo cambian el administrador y el
+/// entrenador (H18, supuesto S13).
+enum EstadoMaquina {
+  OPERATIVA
+  EN_MANTENIMIENTO
+  FUERA_DE_SERVICIO
+
+  @@map("estado_maquina")
+}
+
+/// Máquina del inventario del gimnasio (H17).
+///
+/// `ultimoMotivo` y `ultimoCambioPor` son datos internos: solo el
+/// administrador y el entrenador los reciben. El filtrado lo hace el DTO de
+/// respuesta en el backend (BE-17.1), nunca el frontend.
+///
+/// El historial completo de cambios vive en otra tabla (H18, DB-18.1); estas
+/// dos columnas son la caché del último cambio para no consultarlo al listar.
+///
+/// Las restricciones que Prisma no puede expresar viven como CHECK en la
+/// migración: formato del código (MAQ-000), largo del nombre y del motivo, y
+/// la coherencia entre el estado y la fecha estimada de retorno (una máquina
+/// operativa no tiene fecha de retorno pendiente).
+model Maquina {
+  id                   String        @id @default(uuid()) @db.Uuid
+  codigo               String        @unique @db.VarChar(10)
+  nombre               String        @db.VarChar(60)
+  tipo                 TipoMaquina
+  zona                 ZonaMaquina
+  estado               EstadoMaquina @default(OPERATIVA)
+  fechaEstimadaRetorno DateTime?     @map("fecha_estimada_retorno") @db.Date
+  ultimoMotivo         String?       @map("ultimo_motivo") @db.VarChar(250)
+  ultimoCambioPorId    String?       @map("ultimo_cambio_por") @db.Uuid
+  ultimoCambioPor      User?         @relation(fields: [ultimoCambioPorId], references: [id], onDelete: SetNull)
+  actualizadoEn        DateTime      @default(now()) @updatedAt @map("actualizado_en")
+  historial            HistorialMaquina[]
+
+  @@map("maquina")
+}
+
+/// Operación con la que se registró una membresía (H2).
+enum TipoOperacionMembresia {
+  COMPRA
+  RENOVACION
+
+  @@map("tipo_operacion_membresia")
+}
+
+/// Estado de pago de una membresía (H2). Las fechas de vigencia se fijan al
+/// pasar a PAGADA.
+enum EstadoMembresia {
+  PENDIENTE_PAGO
+  PAGADA
+
+  @@map("estado_membresia")
+}
+
+/// Membresía comprada o renovada por un miembro (H2).
+///
+/// Guarda una copia de las condiciones del plan al momento de la compra
+/// (nombre, tipo, precio, cantidad de clases y tipos de clase), así editar o
+/// desactivar el plan (H1) no la altera.
+///
+/// Viven como CHECK o índice en la migración: precio mayor que 0,
+/// cantidad_clases según el tipo de plan, fechas de vigencia nulas hasta el
+/// pago, una renovación siempre apunta a la membresía anterior, y el índice
+/// único parcial que permite una sola membresía PENDIENTE_PAGO por miembro.
+model Membresia {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  miembroId             String                 @map("miembro_id") @db.Uuid
+  miembro               Miembro                @relation(fields: [miembroId], references: [id])
+  planId                String                 @map("plan_id") @db.Uuid
+  plan                  Plan                   @relation(fields: [planId], references: [id])
+  nombrePlan            String                 @map("nombre_plan") @db.VarChar(60)
+  tipoPlan              TipoPlan               @map("tipo_plan")
+  precio                Decimal                @db.Decimal(10, 2)
+  cantidadClases        Int?                   @map("cantidad_clases")
+  tipoOperacion         TipoOperacionMembresia @map("tipo_operacion")
+  membresiaAnteriorId   String?                @map("membresia_anterior_id") @db.Uuid
+  membresiaAnterior     Membresia?             @relation("RenovacionMembresia", fields: [membresiaAnteriorId], references: [id], onDelete: Restrict)
+  renovaciones          Membresia[]            @relation("RenovacionMembresia")
+  estado                EstadoMembresia        @default(PENDIENTE_PAGO)
+  fechaInicioSolicitada DateTime               @map("fecha_inicio_solicitada") @db.Date
+  fechaInicio           DateTime?              @map("fecha_inicio") @db.Date
+  fechaVencimiento      DateTime?              @map("fecha_vencimiento") @db.Date
+  registradaPorId       String                 @map("registrada_por") @db.Uuid
+  registradaPor         User                   @relation(fields: [registradaPorId], references: [id])
+  pagoAplicadoRef       String?                @unique @map("pago_aplicado_ref") @db.VarChar(100)
+  creadoEn              DateTime               @default(now()) @map("creado_en")
+
+  tiposClase MembresiaTipoClase[]
+  reservas   Reserva[]
+
+  @@index([miembroId, estado])
+  @@map("membresia")
+}
+
+/// Tipos de clase incluidos en la membresía, copiados del plan al comprarla (H2).
+model MembresiaTipoClase {
+  membresiaId String    @map("membresia_id") @db.Uuid
+  membresia   Membresia @relation(fields: [membresiaId], references: [id], onDelete: Cascade)
+  tipoClaseId String    @map("tipo_clase_id") @db.Uuid
+  tipoClase   TipoClase @relation(fields: [tipoClaseId], references: [id])
+
+  @@id([membresiaId, tipoClaseId])
+  @@map("membresia_tipo_clase")
+}
+
+/// Concepto de un cobro (Módulo 5): compra de membresía y renovación (H2) o
+/// sesión adicional con un entrenador (H9).
+enum ConceptoCobro {
+  MEMBRESIA
+  RENOVACION
+  SESION_ADICIONAL
+
+  @@map("concepto_cobro")
+}
+
+/// Tipo del registro que origina un cobro (Módulo 5).
+enum ReferenciaCobro {
+  MEMBRESIA
+  SESION
+
+  @@map("referencia_cobro")
+}
+
+/// Estado de un cobro (Módulo 5). Se crea PENDIENTE y pasa a PAGADO cuando
+/// la pasarela aprueba un intento de pago (H12).
+enum EstadoCobro {
+  PENDIENTE
+  PAGADO
+
+  @@map("estado_cobro")
+}
+
+/// Cobro que el miembro paga desde su cuenta (Módulo 5). Lo crea
+/// CobrosService.crearCobro() desde el módulo que origina el cobro (H2 al
+/// registrar una membresía).
+///
+/// El monto mayor que 0 vive como CHECK en la migración. Cada registro de
+/// origen tiene un solo cobro (índice único referencia_tipo + referencia_id).
+model Cobro {
+  id             String          @id @default(uuid()) @db.Uuid
+  miembroId      String          @map("miembro_id") @db.Uuid
+  miembro        Miembro         @relation(fields: [miembroId], references: [id])
+  concepto       ConceptoCobro
+  /// Plan de la membresía, o fecha y entrenador de la sesión (H12).
+  detalle        String          @db.VarChar(150)
+  monto          Decimal         @db.Decimal(10, 2)
+  referenciaTipo ReferenciaCobro @map("referencia_tipo")
+  referenciaId   String          @map("referencia_id") @db.Uuid
+  /// Desde cuándo se puede pagar (renovaciones, supuesto S3); null = desde que se genera.
+  habilitadoDesde DateTime?      @map("habilitado_desde") @db.Date
+  estado         EstadoCobro     @default(PENDIENTE)
+  pagadoEn       DateTime?       @map("pagado_en")
+  creadoEn       DateTime        @default(now()) @map("creado_en")
+
+  intentos    IntentoPago[]
+  comprobante Comprobante?
+  sesion      SesionPersonal?
+
+  @@unique([referenciaTipo, referenciaId])
+  @@index([miembroId, estado])
+  @@map("cobro")
+}
+
+/// Resultado de un intento de pago en la pasarela simulada (H12).
+enum ResultadoPago {
+  APROBADO
+  RECHAZADO
+  ERROR
+
+  @@map("resultado_pago")
+}
+
+/// Estado de un registro de acceso (H10): DENTRO, SALIO o CERRADO_AUTO (23:59, UTC-6).
+enum EstadoAcceso {
+  DENTRO
+  SALIO
+  CERRADO_AUTO
+
+  @@map("estado_acceso")
+}
+
+/// Intento de pago de un cobro en la pasarela simulada (H12).
+///
+/// Nunca guarda el número completo de la tarjeta ni el código de seguridad:
+/// solo los últimos 4 dígitos. El formato de `ultimos4` (4 dígitos) y de
+/// `referencia` (PAY-AAAAMMDD-XXXXXX) viven como CHECK en la migración.
+model IntentoPago {
+  id         String        @id @default(uuid()) @db.Uuid
+  cobroId    String        @map("cobro_id") @db.Uuid
+  cobro      Cobro         @relation(fields: [cobroId], references: [id])
+  resultado  ResultadoPago
+  mensaje    String        @db.VarChar(100)
+  ultimos4   String        @db.Char(4)
+  referencia String        @unique @db.VarChar(22)
+  creadoEn   DateTime      @default(now()) @map("creado_en")
+
+  comprobante Comprobante?
+
+  @@index([cobroId])
+  @@map("intento_pago")
+}
+
+/// Comprobante de un cobro pagado (H12). Uno por cobro.
+///
+/// `numero` (CMP-000001) se toma de la secuencia `comprobante_numero_seq`. El
+/// formato y que total = subtotal + iva viven como CHECK en la migración.
+model Comprobante {
+  id         String      @id @default(uuid()) @db.Uuid
+  numero     String      @unique @db.VarChar(10)
+  cobroId    String      @unique @map("cobro_id") @db.Uuid
+  cobro      Cobro       @relation(fields: [cobroId], references: [id])
+  intentoId  String      @unique @map("intento_id") @db.Uuid
+  intento    IntentoPago @relation(fields: [intentoId], references: [id])
+  subtotal   Decimal     @db.Decimal(10, 2)
+  iva        Decimal     @db.Decimal(10, 2)
+  total      Decimal     @db.Decimal(10, 2)
+  emitidoEn  DateTime    @default(now()) @map("emitido_en")
+
+  @@map("comprobante")
+}
+
+/// Reserva de un cupo en una clase grupal (H5, DB-5.1).
+///
+/// `membresiaId` es la membresía con la que se reservó: de ahí salen los
+/// créditos del set (créditos − reservas CONFIRMADA de esa membresía, BE-2.4).
+/// Los lugares disponibles de la clase y los créditos no se guardan: se
+/// calculan contando las reservas CONFIRMADA, así que cancelar libera ambos.
+///
+/// Lo que Prisma no puede expresar vive en la migración:
+/// - índice único parcial en (clase_id, miembro_id) cuando estado = CONFIRMADA
+///   (una sola reserva activa por miembro y clase; se puede volver a reservar
+///   después de cancelar, H6);
+/// - CHECK: cancelada_en es nulo solo si la reserva sigue CONFIRMADA.
+model Reserva {
+  id          String            @id @default(uuid()) @db.Uuid
+  claseId     String            @map("clase_id") @db.Uuid
+  clase       Clase             @relation(fields: [claseId], references: [id])
+  miembroId   String            @map("miembro_id") @db.Uuid
+  miembro     Miembro           @relation(fields: [miembroId], references: [id])
+  membresiaId String            @map("membresia_id") @db.Uuid
+  membresia   Membresia         @relation(fields: [membresiaId], references: [id])
+  estado      EstadoReserva     @default(CONFIRMADA)
+  asistencia  AsistenciaReserva @default(SIN_REGISTRAR)
+  /// Quién y cuándo registró la asistencia (H19). Van juntos con `asistencia`:
+  /// o los tres sin registrar, o los tres puestos (CHECK en la migración).
+  asistenciaRegistradaPorId String?   @map("asistencia_registrada_por") @db.Uuid
+  asistenciaRegistradaPor   User?     @relation(fields: [asistenciaRegistradaPorId], references: [id])
+  asistenciaRegistradaEn    DateTime? @map("asistencia_registrada_en")
+  creadaEn    DateTime          @default(now()) @map("creada_en")
+  canceladaEn DateTime?         @map("cancelada_en")
+
+  resena Resena?
+
+  @@index([claseId, estado])
+  @@index([miembroId, estado])
+  @@index([membresiaId, estado])
+  @@map("reserva")
+}
+
+/// Ingreso y salida de un miembro del gimnasio (H10).
+///
+/// - `estadoMembresia` guarda el estado de la membresía al ingresar (H11).
+/// - `motivoExcepcion` lo exige H11 cuando el miembro no tiene la membresía al día.
+/// - Un miembro solo puede tener un registro DENTRO a la vez: lo garantiza el
+///   índice único parcial `registro_acceso_miembro_dentro_key` de la migración
+///   (Prisma no puede declararlo aquí).
+/// - Los CHECK de coherencia entre estado, salida y usuario también viven en
+///   la migración.
+model RegistroAcceso {
+  id                    String       @id @default(uuid()) @db.Uuid
+  miembroId             String       @map("miembro_id") @db.Uuid
+  miembro               Miembro      @relation(fields: [miembroId], references: [id], onDelete: Restrict)
+  ingresoEn             DateTime     @default(now()) @map("ingreso_en")
+  salidaEn              DateTime?    @map("salida_en")
+  estado                EstadoAcceso @default(DENTRO)
+  registradoPorId       String       @map("registrado_por") @db.Uuid
+  registradoPor         User         @relation("AccesoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  salidaRegistradaPorId String?      @map("salida_registrada_por") @db.Uuid
+  salidaRegistradaPor   User?        @relation("AccesoSalidaRegistradaPor", fields: [salidaRegistradaPorId], references: [id], onDelete: Restrict)
+  estadoMembresia       String       @map("estado_membresia") @db.VarChar(30)
+  motivoExcepcion       String?      @map("motivo_excepcion") @db.VarChar(250)
+
+  @@index([miembroId, estado])
+  @@index([ingresoEn])
+  @@map("registro_acceso")
+}
+/// Cambio de estado de una máquina (H18). La máquina guarda solo el último
+/// cambio; acá está la historia completa, del más reciente al más antiguo.
+///
+/// Viven como CHECK en la migración: el estado nuevo distinto del anterior, el
+/// largo del motivo y que un retorno a OPERATIVA no lleve fecha estimada.
+model HistorialMaquina {
+  id                   String        @id @default(uuid()) @db.Uuid
+  maquinaId            String        @map("maquina_id") @db.Uuid
+  maquina              Maquina       @relation(fields: [maquinaId], references: [id], onDelete: Cascade)
+  estadoAnterior       EstadoMaquina @map("estado_anterior")
+  estadoNuevo          EstadoMaquina @map("estado_nuevo")
+  motivo               String        @db.VarChar(250)
+  fechaEstimadaRetorno DateTime?     @map("fecha_estimada_retorno") @db.Date
+  cambiadoPorId        String        @map("cambiado_por") @db.Uuid
+  cambiadoPor          User          @relation(fields: [cambiadoPorId], references: [id])
+  cambiadoEn           DateTime      @default(now()) @map("cambiado_en")
+
+  @@index([maquinaId, cambiadoEn])
+  @@map("historial_maquina")
+}
+
+/// Reseña de una clase o de una sesión personal (H20).
+///
+/// Apunta a la reserva o a la sesión, nunca a las dos, y hay a lo sumo una por
+/// registro (índices únicos). El entrenador y el tipo de clase se copian del
+/// registro al guardarla, así H21 promedia sin depender de lo que pase después
+/// con la clase.
+///
+/// Viven como CHECK en la migración: exactamente uno de los dos registros, al
+/// menos una calificación, el rango 1 a 5 y la coherencia del tipo de clase.
+model Resena {
+  id               String          @id @default(uuid()) @db.Uuid
+  miembroId        String          @map("miembro_id") @db.Uuid
+  miembro          Miembro         @relation(fields: [miembroId], references: [id])
+  reservaId        String?         @unique @map("reserva_id") @db.Uuid
+  reserva          Reserva?        @relation(fields: [reservaId], references: [id])
+  sesionId         String?         @unique @map("sesion_id") @db.Uuid
+  sesion           SesionPersonal? @relation(fields: [sesionId], references: [id])
+  entrenadorId     String          @map("entrenador_id") @db.Uuid
+  entrenador       User            @relation(fields: [entrenadorId], references: [id])
+  /// Nulo en las sesiones personales, que no son de un tipo de clase.
+  tipoClaseId      String?         @map("tipo_clase_id") @db.Uuid
+  tipoClase        TipoClase?      @relation(fields: [tipoClaseId], references: [id])
+  calActividad     Int?            @map("cal_actividad") @db.SmallInt
+  calEntrenador    Int?            @map("cal_entrenador") @db.SmallInt
+  calInstalaciones Int?            @map("cal_instalaciones") @db.SmallInt
+  comentario       String?         @db.VarChar(500)
+  creadaEn         DateTime        @default(now()) @map("creada_en")
+
+  // H21 promedia por entrenador y por tipo de clase.
+  @@index([entrenadorId])
+  @@index([tipoClaseId])
+  @@map("resena")
 }

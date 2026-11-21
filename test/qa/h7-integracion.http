@@ -1,0 +1,75 @@
+# H7 / BE-25.1. PLANTILLA NO EJECUTADA con PostgreSQL.
+# Requiere API/BD QA aisladas y autorizadas, DB-7.1 YA aplicada y fixtures propios.
+# La petición POST modifica datos: no ejecutar contra desarrollo compartido.
+@baseUrl = http://127.0.0.1:3001/api/v1
+@claseId = REEMPLAZAR_UUID_FIXTURE
+@admin = REEMPLAZAR_JWT_QA_ADMIN
+@miembro = REEMPLAZAR_JWT_QA_MIEMBRO
+@entrenador = REEMPLAZAR_JWT_QA_ENTRENADOR
+@recepcion = REEMPLAZAR_JWT_QA_RECEPCION
+
+### Éxito200:3confirmadas,1CANCELADA_MIEMBRO previa intacta,3avisos
+POST {{baseUrl}}/clases/{{claseId}}/cancelar
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{"motivo":"El entrenador está incapacitado"}
+
+### Reintento409, no modifica auditoría/reservas ni duplica avisos
+POST {{baseUrl}}/clases/{{claseId}}/cancelar
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{"motivo":"Se reintenta la misma cancelación"}
+
+### 403MIEMBRO
+POST {{baseUrl}}/clases/{{claseId}}/cancelar
+Authorization: Bearer {{miembro}}
+Content-Type: application/json
+
+{"motivo":"El entrenador está incapacitado"}
+
+### 403ENTRENADOR
+POST {{baseUrl}}/clases/{{claseId}}/cancelar
+Authorization: Bearer {{entrenador}}
+Content-Type: application/json
+
+{"motivo":"El entrenador está incapacitado"}
+
+### 403RECEPCION
+POST {{baseUrl}}/clases/{{claseId}}/cancelar
+Authorization: Bearer {{recepcion}}
+Content-Type: application/json
+
+{"motivo":"El entrenador está incapacitado"}
+
+### 401sin token
+POST {{baseUrl}}/clases/{{claseId}}/cancelar
+Content-Type: application/json
+
+{"motivo":"El entrenador está incapacitado"}
+
+### 400UUID inválido
+POST {{baseUrl}}/clases/123/cancelar
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{"motivo":"El entrenador está incapacitado"}
+
+### 400motivo9caracteres (repetir con10,250y251 sobre fixtures futuros nuevos)
+POST {{baseUrl}}/clases/{{claseId}}/cancelar
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{"motivo":"123456789"}
+
+### 404UUID sin clase
+POST {{baseUrl}}/clases/00000000-0000-4000-8000-000000000000/cancelar
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{"motivo":"El entrenador está incapacitado"}
+
+### H23bandeja: ejecutar con el miembro de reserva afectada para ver el aviso
+GET {{baseUrl}}/avisos/mios
+Authorization: Bearer {{miembro}}

@@ -13,6 +13,12 @@ async function bootstrap() {
 
   // Versionado en la URI: /api/v1/...
   app.setGlobalPrefix(API_PREFIX);
+  
+  // Permite peticiones desde el frontend desplegado (FRONTEND_URL, separadas por coma)
+  app.enableCors({
+    origin: (process.env.FRONTEND_URL ?? 'http://localhost:3000').split(','),
+    credentials: true,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

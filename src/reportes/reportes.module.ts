@@ -1,0 +1,15 @@
+import { Module } from '@nestjs/common';
+import { ReportesController } from '@Reportes/controllers';
+import { ReportesDesempenoRepository, ReportesRepository } from '@Reportes/repositories';
+import { ReportesDesempenoService, ReportesService } from '@Reportes/services';
+
+/**
+ * Reportes y analítica para la administración (Módulo 10, H26 a H29).
+ * Solo lee: no modifica las tablas de los demás módulos.
+ */
+@Module({
+    controllers: [ReportesController],
+    providers: [ReportesService, ReportesRepository, ReportesDesempenoService, ReportesDesempenoRepository],
+    exports: [ReportesService, ReportesRepository],
+})
+export class ReportesModule { }

@@ -39,9 +39,10 @@ export class TokenService {
 
   /** Emite un par de tokens nuevo y persiste el refresh token. */
   async issueTokenPair(user: User): Promise<TokenPair> {
-    const payload: AccessTokenPayload = {
+      const payload: AccessTokenPayload = {
       sub: user.id,
       email: user.email,
+      rol: user.rol,
     };
 
     const accessToken = await this.jwtService.signAsync(payload);
