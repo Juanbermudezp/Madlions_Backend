@@ -1,8 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Module, RequestMethod } from '@nestjs/common';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '@Prisma/services';
 import { AvisosModule } from './avisos.module.js';
-import { AvisosService } from './services/index.js';
+import { AvisosController } from './controllers/index.js';
+import { AvisosBandejaService, AvisosService } from './services/index.js';
 
 /** PrismaModule es global en la app; aquí se reemplaza por un doble. */
 @Module({
@@ -10,6 +12,23 @@ import { AvisosService } from './services/index.js';
   exports: [PrismaService],
 })
 class PrismaFalsoModule {}
+
+/** Método HTTP y ruta de cada handler del controlador. */
+function rutas(controlador: object): { metodo: string; ruta: string }[] {
+  const prototipo = (controlador as { prototype: Record<string, unknown> })
+    .prototype;
+  return Object.getOwnPropertyNames(prototipo)
+    .filter((nombre) => nombre !== 'constructor')
+    .map((nombre) => prototipo[nombre])
+    .filter((handler) => Reflect.hasMetadata(PATH_METADATA, handler as object))
+    .map((handler) => ({
+      metodo:
+        RequestMethod[
+          Reflect.getMetadata(METHOD_METADATA, handler as object) as number
+        ],
+      ruta: String(Reflect.getMetadata(PATH_METADATA, handler as object)),
+    }));
+}
 
 describe('AvisosModule', () => {
   // Compilar un módulo de Nest tarda varios segundos en máquinas lentas o con
@@ -20,11 +39,21 @@ describe('AvisosModule', () => {
     }).compile();
 
     expect(ref.get(AvisosService)).toBeInstanceOf(AvisosService);
+    expect(ref.get(AvisosBandejaService)).toBeInstanceOf(AvisosBandejaService);
   }, 15000);
 
-  it('no tiene controladores: los avisos no se crean desde la API', () => {
-    const controladores: unknown[] =
-      Reflect.getMetadata('controllers', AvisosModule) ?? [];
-    expect(controladores).toHaveLength(0);
+  it('solo exporta AvisosService: la bandeja es interna del módulo', () => {
+    expect(Reflect.getMetadata('exports', AvisosModule)).toEqual([
+      AvisosService,
+    ]);
+  });
+
+  it('la API solo lee y marca como leídos: ninguna ruta crea avisos (H22)', () => {
+    expect(rutas(AvisosController)).toEqual([
+      { metodo: 'GET', ruta: 'mios' },
+      { metodo: 'GET', ruta: 'no-leidos/conteo' },
+      { metodo: 'GET', ruta: ':id' },
+      { metodo: 'POST', ruta: 'marcar-todos-leidos' },
+    ]);
   });
 });
