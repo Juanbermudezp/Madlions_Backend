@@ -1,15 +1,23 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { aFechaLocal, hoyLocal, sumarDias } from '@Common/fechas';
 import { ReportesRepository } from '@Reportes/repositories';
-import type { DetalleIngresosQueryDto, DetalleIngresosResponseDto, ReporteIngresosResponseDto, ReporteOcupacionResponseDto } from '@Reportes/dto';
+import type { DetalleIngresosQueryDto, DetalleIngresosResponseDto, ReporteIngresosResponseDto, ReporteOcupacionResponseDto, ReporteRenovacionResponseDto } from '@Reportes/dto';
 import { ResultadoPago } from '@PrismaClient';
 import { calcularOcupacion, etiquetaOcupacion, resolverRango } from './reglas-reporte.js';
 import { periodoAnterior, resumirIngresos } from './reglas-ingresos.js';
+import { resumirRenovacion } from './reglas-renovacion.js';
 
 /** Reportes y analítica para la administración (Módulo 10). */
 @Injectable()
 export class ReportesService {
     constructor(private readonly reportesRepository: ReportesRepository) { }
+
+    /** H28: reloj único controlable; rango H26 y clasificación por día local. */
+    async renovacion(desde?: string, hasta?: string, ahora: Date = new Date()): Promise<ReporteRenovacionResponseDto> {
+        const rango = this.rango(desde, hasta, ahora);
+        const filas = await this.reportesRepository.renovacion(rango.desde, rango.hasta, ahora);
+        return resumirRenovacion(filas, hoyLocal(ahora));
+    }
 
     /**
      * Valida el rango y lo convierte a instantes UTC: [desde 00:00, hasta + 1 día 00:00)

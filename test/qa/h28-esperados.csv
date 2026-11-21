@@ -1,0 +1,23 @@
+id,nombre,codigo,plan,vencimiento,pago_renovacion_local,esperado
+M1,Carlos Molina,MBR-000011,Mensual,2026-10-10,2026-10-10,RENOVADA
+M2,Andrea Rivas,MBR-000014,Set de clases mensual,2026-10-12,2026-10-19,RENOVADA
+M8,Pedro Alvarado,MBR-000027,Mensual,2026-10-18,2026-10-20,RENOVADA
+M9,Lucía Méndez,MBR-000030,Set de clases mensual,2026-10-22,2026-10-22,RENOVADA
+M3,Laura Hernández,MBR-000021,Mensual,2026-10-15,2026-10-23,CANCELADA
+M4,Diego Flores,MBR-000033,Mensual,2026-10-20,SIN PAGO,CANCELADA
+M5,Sofía Castillo,MBR-000045,Set de clases mensual,2026-10-25,PENDIENTE RECHAZADO,CANCELADA
+M6,Javier Ortiz,MBR-000052,Mensual,2026-11-02,SIN PAGO,EN_PERIODO
+M7,Elena Cruz,MBR-000060,Daypass,2026-10-15,NO APLICA,EXCLUIDA
+M10,Raúl Pineda,MBR-000061,Mensual,2026-09-15,NO APLICA,FUERA_DE_RANGO
+
+metrica,esperado,calculo_manual
+hoy,2026-11-06,FIJO
+desde,2026-10-07,FIJO OFICIAL
+hasta,2026-11-06,FIJO OFICIAL
+renovadas,4,M1+M2+M8+M9
+canceladas,3,M3+M4+M5
+enPeriodo,1,M6
+denominador,7,4+3
+tasaRenovacion,57.1,ROUND_HALF_UP(4/7*100;1)
+tasaCancelacion,42.9,100-57.1
+ordenNoRenovaron,Sofía/Diego/Laura,2026-10-25/2026-10-20/2026-10-15 DESC

@@ -1,0 +1,74 @@
+# QA-28.1: PLANTILLA NO EJECUTADA CONTRA PostgreSQL.
+# Requiere API real apuntando explícitamente a QA aislada autorizada y
+# migraciones YA aplicadas. No usar API/base de desarrollo por defecto.
+# La matriz requiere reloj06/11/2026: usar un harness de Test con el método
+# real ReportesService.renovacion(..., AHORA), sin cambiar reloj global del host
+# ni añadir parámetros de reloj a la API de producción.
+@baseUrl = http://127.0.0.1:3001/api/v1
+@admin = REEMPLAZAR_JWT_QA_ADMIN
+@miembro = REEMPLAZAR_JWT_QA_MIEMBRO
+@entrenador = REEMPLAZAR_JWT_QA_ENTRENADOR
+@recepcion = REEMPLAZAR_JWT_QA_RECEPCION
+
+### C1-C4 oficial:4/3/1;57.1/42.9; Sofía/Diego/Laura
+GET {{baseUrl}}/reportes/renovacion?desde=2026-10-07&hasta=2026-11-06
+Authorization: Bearer {{admin}}
+
+### C2 M1 día0, original por vencimiento10/10
+GET {{baseUrl}}/reportes/renovacion?desde=2026-10-10&hasta=2026-10-10
+Authorization: Bearer {{admin}}
+
+### C2 M2 día7; repetir con pago19/10 23:59:59.999 local
+GET {{baseUrl}}/reportes/renovacion?desde=2026-10-12&hasta=2026-10-12
+Authorization: Bearer {{admin}}
+
+### C2 M3 pago día8, cancelada
+GET {{baseUrl}}/reportes/renovacion?desde=2026-10-15&hasta=2026-10-15
+Authorization: Bearer {{admin}}
+
+### C3/C6 solo M6 en gracia:0/0/1,tasasnull,lista vacía
+GET {{baseUrl}}/reportes/renovacion?desde=2026-11-02&hasta=2026-11-02
+Authorization: Bearer {{admin}}
+
+### C6 sin vencimientos:tasasnull,0/0/0 (comprobar ausencia real de fixtures)
+GET {{baseUrl}}/reportes/renovacion?desde=2026-09-01&hasta=2026-09-01
+Authorization: Bearer {{admin}}
+
+### Por defecto30d:08/10–06/11 con relojQA fijo06/11
+GET {{baseUrl}}/reportes/renovacion
+Authorization: Bearer {{admin}}
+
+### Máximo12meses permitido
+GET {{baseUrl}}/reportes/renovacion?desde=2026-01-01&hasta=2026-12-31
+Authorization: Bearer {{admin}}
+
+### C7 exceso400
+GET {{baseUrl}}/reportes/renovacion?desde=2026-01-01&hasta=2027-01-01
+Authorization: Bearer {{admin}}
+
+### C7 inversión400
+GET {{baseUrl}}/reportes/renovacion?desde=2026-11-07&hasta=2026-11-06
+Authorization: Bearer {{admin}}
+
+### C7 fecha inexistente400
+GET {{baseUrl}}/reportes/renovacion?desde=2026-02-30&hasta=2026-03-01
+Authorization: Bearer {{admin}}
+
+### C7 sin sesión401
+GET {{baseUrl}}/reportes/renovacion
+
+### C7 token inválido401
+GET {{baseUrl}}/reportes/renovacion
+Authorization: Bearer invalido
+
+### C7 MIEMBRO403
+GET {{baseUrl}}/reportes/renovacion
+Authorization: Bearer {{miembro}}
+
+### C7 ENTRENADOR403
+GET {{baseUrl}}/reportes/renovacion
+Authorization: Bearer {{entrenador}}
+
+### C7 RECEPCION403
+GET {{baseUrl}}/reportes/renovacion
+Authorization: Bearer {{recepcion}}

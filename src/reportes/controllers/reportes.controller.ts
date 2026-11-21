@@ -10,7 +10,7 @@ import {
     ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Roles } from '@Auth/decorators';
-import { DetalleIngresosQueryDto, DetalleIngresosResponseDto, RangoReporteQueryDto, ReporteIngresosResponseDto, ReporteOcupacionResponseDto } from '@Reportes/dto';
+import { DetalleIngresosQueryDto, DetalleIngresosResponseDto, RangoReporteQueryDto, ReporteIngresosResponseDto, ReporteOcupacionResponseDto, ReporteRenovacionResponseDto } from '@Reportes/dto';
 import { ReportesService } from '@Reportes/services';
 import { Rol } from '@PrismaClient';
 
@@ -20,6 +20,17 @@ import { Rol } from '@PrismaClient';
 @Controller('reportes')
 export class ReportesController {
     constructor(private readonly reportesService: ReportesService) { }
+
+    @Get('renovacion')
+    @Roles(Rol.ADMINISTRADOR)
+    @ApiOperation({ summary: 'Tasas de renovación y cancelación de membresías Mensual/Set por vencimiento (H28)' })
+    @ApiOkResponse({ type: ReporteRenovacionResponseDto })
+    @ApiBadRequestResponse({ description: 'Fechas inválidas, inicio posterior al fin o rango superior a 12 meses.' })
+    @ApiUnauthorizedResponse({ description: 'Sin sesión o token inválido.' })
+    @ApiForbiddenResponse({ description: 'El usuario no es administrador.' })
+    renovacion(@Query() query: RangoReporteQueryDto): Promise<ReporteRenovacionResponseDto> {
+        return this.reportesService.renovacion(query.desde, query.hasta);
+    }
 
     @Get('ingresos')
     @Roles(Rol.ADMINISTRADOR)
