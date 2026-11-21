@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from './../src/app.module.js';
 import { PrismaService } from '@Prisma/services';
+import { auditoriaClaseFixture } from './qa/auditoria-clase-fixture.js';
 import {
     AsistenciaReserva,
     AsistenciaSesion,
@@ -101,6 +102,7 @@ describe('QA-19.1 · Registro de asistencia (H19)', () => {
         fin: new Date(Date.now() + hastaMs),
         cupoMaximo: 10,
         estado,
+        ...await auditoriaClaseFixture(prisma, estado),
       },
     });
     return clase.id;
