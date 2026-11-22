@@ -53,7 +53,8 @@ Todas las rutas están cerradas por defecto (guard global `JwtAuthGuard`). Adem�
 | PATCH | /api/v1/tipos-clase/:id | Edita un tipo de clase | ADMINISTRADOR |
 | GET | /api/v1/clases | Agenda de clases programadas | ADMINISTRADOR, RECEPCION |
 | POST | /api/v1/clases | Programa una clase (horario, entrenador, cupo) | ADMINISTRADOR |
-| PATCH | /api/v1/clases/:id | Edita o cancela una clase (con motivo) | ADMINISTRADOR |
+| PATCH | /api/v1/clases/:id | Edita una clase que aún no empieza | ADMINISTRADOR |
+| POST | /api/v1/clases/:id/cancelar | Cancela una clase futura con motivo y avisa a los miembros con reserva | ADMINISTRADOR |
 | GET | /api/v1/clases/entrenadores | Entrenadores que pueden impartir clases | ADMINISTRADOR |
 | GET | /api/v1/clases/mias | Clases que imparte el entrenador autenticado | ENTRENADOR |
 | GET | /api/v1/clases/reservables | Clases de la semana con cupos disponibles | MIEMBRO |
