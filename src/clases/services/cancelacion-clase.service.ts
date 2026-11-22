@@ -16,7 +16,7 @@ export class CancelacionClaseService {
         catch (error) {
             if (error instanceof ClaseNoCancelableError) {
                 if (error.motivo === 'NO_EXISTE') throw new NotFoundException('La clase no existe.');
-                throw new ConflictException(error.motivo === 'CANCELADA' ? 'La clase ya está cancelada.' : 'No se puede cancelar una clase que ya empezó o terminó.');
+                throw new ConflictException(error.motivo === 'CANCELADA' ? 'La clase ya fue cancelada' : 'No se puede cancelar una clase que ya empezó o terminó.');
             }
             throw error;
         }
